@@ -11,7 +11,7 @@ import BaseToggle from '../components/base/BaseToggle.vue'
 import BaseButton from '../components/base/BaseButton.vue'
 import BaseBadge from '../components/base/BaseBadge.vue'
 import EmptyState from '../components/base/EmptyState.vue'
-import { Users, User, RefreshCw, Search, MessagesSquare } from 'lucide-vue-next'
+import { Users, User, RefreshCw, Search, MessagesSquare, Contact } from 'lucide-vue-next'
 
 interface Chat {
   id: string
@@ -29,15 +29,21 @@ interface Chat {
 const { ok, bad } = useToast()
 const link = useLinkStore()
 const chats = ref<Chat[]>([])
+/// From the server, not `chats.length`: the list is capped, and a header
+/// that counts the page rather than the account said "1 of 500" while the
+/// account held 922.
+const total = ref(0)
 const loading = ref(true)
 const q = ref('')
 const show = ref<'all' | 'tracked' | 'groups' | 'private'>('all')
 const refreshing = ref(false)
+const resyncing = ref(false)
 
 async function load() {
   try {
-    const { data } = await api.get<{ chats: Chat[] }>('/chats')
+    const { data } = await api.get<{ chats: Chat[]; total: number }>('/chats')
     chats.value = data.chats
+    total.value = data.total ?? data.chats.length
   } catch (e) {
     bad(errorMessage(e))
   } finally {
@@ -67,6 +73,21 @@ async function toggle(c: Chat, tracked: boolean) {
   }
 }
 
+/// The saved names ride WhatsApp's app-state sync, which only runs at
+/// pairing — when none of the chats exist yet. This pulls them again.
+async function resyncContacts() {
+  resyncing.value = true
+  try {
+    const { data } = await api.post<{ applied: number; contacts: number }>('/whatsapp/resync-contacts', {})
+    ok(`${data.contacts} contacts known${data.applied ? `, ${data.applied} chats renamed` : ''}`)
+    await load()
+  } catch (e) {
+    bad(errorMessage(e))
+  } finally {
+    resyncing.value = false
+  }
+}
+
 async function refreshGroups() {
   refreshing.value = true
   try {
@@ -92,9 +113,12 @@ const FILTERS = [
   <div class="rise">
     <PageHeader
       title="Chats & rules"
-      :subtitle="`${trackedCount} of ${chats.length} chats are being read. Everything else is ignored completely — not stored, not analysed.`"
+      :subtitle="`${trackedCount} of ${total} chats are being read. Everything else is ignored completely — not stored, not analysed.`"
     >
       <template #actions>
+        <BaseButton variant="secondary" :loading="resyncing" :disabled="!link.link?.ready" @click="resyncContacts">
+          <Contact class="size-4" :stroke-width="1.5" /> Resync contact names
+        </BaseButton>
         <BaseButton variant="secondary" :loading="refreshing" :disabled="!link.link?.ready" @click="refreshGroups">
           <RefreshCw class="size-4" :stroke-width="1.5" /> Refresh group list
         </BaseButton>

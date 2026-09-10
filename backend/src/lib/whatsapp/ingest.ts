@@ -23,6 +23,34 @@ export interface DiscoveredChat {
   lastMessageAt?: Date | null
 }
 
+/// Remembers a saved contact name, and gives it to the chat if one exists.
+///
+/// Stored whether or not a chat exists yet: the app-state sync that carries
+/// the address book runs BEFORE the history sync creates the chats, so
+/// anything applied only to existing rows is thrown away.
+export async function rememberContact(jid: string, name: string): Promise<void> {
+  const clean = name.trim()
+  if (!jid || !clean) return
+  await prisma.contact.upsert({ where: { jid }, create: { jid, name: clean }, update: { name: clean } })
+  const chat = await prisma.chat.findUnique({ where: { jid } })
+  if (chat && isFallbackName(chat.name)) await prisma.chat.update({ where: { id: chat.id }, data: { name: clean } })
+}
+
+/// Applies every known contact name to the chats still carrying a fallback.
+/// Used after an address-book resync, when the names arrive long after the
+/// chats they belong to.
+export async function applyContactNames(): Promise<number> {
+  const contacts = await prisma.contact.findMany()
+  let applied = 0
+  for (const c of contacts) {
+    const chat = await prisma.chat.findUnique({ where: { jid: c.jid } })
+    if (!chat || !isFallbackName(chat.name)) continue
+    await prisma.chat.update({ where: { id: chat.id }, data: { name: c.name } })
+    applied += 1
+  }
+  return applied
+}
+
 function fallbackName(jid: string): string {
   if (jid.endsWith('@g.us')) return `Group ${jid.split('@')[0].slice(-6)}`
   if (jid.endsWith('@lid')) return `Unknown contact (${jid.split('@')[0].slice(-6)})`
@@ -37,7 +65,10 @@ function isFallbackName(name: string): boolean {
 /// fallback one; a fallback is replaced the moment a real one appears.
 export async function discoverChat(d: DiscoveredChat) {
   const existing = await prisma.chat.findUnique({ where: { jid: d.jid } })
-  const incoming = d.name?.trim() || null
+  // A saved contact name beats anything the chat record carries: WhatsApp
+  // shows you the name you gave someone, not their push name.
+  const saved = d.isGroup ? null : (await prisma.contact.findUnique({ where: { jid: d.jid } }))?.name ?? null
+  const incoming = saved || d.name?.trim() || null
   if (!existing) {
     return prisma.chat.create({
       data: {

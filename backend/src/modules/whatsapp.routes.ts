@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { authenticate } from '../middleware/auth.js'
-import { baileysStatus, start, stop, logout, refreshGroups, probeInstalled, sessionFileCount } from '../lib/whatsapp/baileys.js'
+import { baileysStatus, start, stop, logout, refreshGroups, resyncContacts, probeInstalled, sessionFileCount } from '../lib/whatsapp/baileys.js'
 import { waDigits, isUsableWaId } from '../lib/input.js'
 
 export default async function whatsappRoutes(app: FastifyInstance) {
@@ -22,6 +22,17 @@ export default async function whatsappRoutes(app: FastifyInstance) {
   app.post('/api/whatsapp/stop', async () => ({ link: await stop() }))
 
   app.post('/api/whatsapp/unlink', async () => ({ link: await logout() }))
+
+  /// Pulls the saved contact names again. Separate from the group refresh
+  /// because they come from different places: groups from a direct query,
+  /// names from the app-state sync.
+  app.post('/api/whatsapp/resync-contacts', async (request, reply) => {
+    try {
+      return await resyncContacts()
+    } catch (err) {
+      return reply.status(409).send({ error: err instanceof Error ? err.message : String(err) })
+    }
+  })
 
   app.post('/api/whatsapp/refresh-groups', async (request, reply) => {
     try {

@@ -32,6 +32,22 @@ model AppSetting {
   @@map("app_settings")
 }
 
+/// The address book, kept separately from the chat list on purpose.
+///
+/// WhatsApp delivers saved contact names through the app-state sync, which
+/// fires BEFORE the history sync has created any of the chats they belong
+/// to. Applying a name only to a chat that already exists therefore dropped
+/// all 905 of them on the floor. A contact is also not a conversation — most
+/// of an address book has never been messaged — so it cannot simply become a
+/// row in `chats`.
+model Contact {
+  jid       String   @id
+  name      String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("contacts")
+}
+
 // ─── Chats ──────────────────────────────────────────────────────────────────
 
 /// A WhatsApp group or private chat the linked account can see. Discovered

@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, rmSync } from 'fs'
 import { WA_SESSION_DIR, ensureWaSessionDir } from '../paths.js'
 import { parseInbound, jidFor, unwrap, historyChats, type ParsedInbound } from './inbound.js'
-import { handleInbound, discoverChat } from './ingest.js'
+import { handleInbound, discoverChat, rememberContact, applyContactNames } from './ingest.js'
 import prisma from '../prisma.js'
 
 /// A linked-device WhatsApp connection, over the multi-device protocol
@@ -602,19 +602,58 @@ function wireDiscovery(sock: any) {
   sock.ev.on('groups.update', groupEvent)
 
   const contactEvent = async (contacts: any[]) => {
+    let kept = 0
     for (const c of contacts ?? []) {
       const n = contactName(c)
-      if (!c?.id || !n || !c.id.endsWith('@s.whatsapp.net')) continue
+      if (!c?.id || !n) continue
       try {
-        const existing = await prisma.chat.findUnique({ where: { jid: c.id } })
-        if (existing) await discoverChat({ jid: c.id, name: n, isGroup: false })
-      } catch {
-        /* cosmetic */
+        // Remembered even when no chat exists yet. These arrive from the
+        // app-state sync, which runs before the history sync has created a
+        // single chat — applying them only to existing rows dropped all 905.
+        await rememberContact(c.id, n)
+        // A contact can be addressed by LID as well; name that chat too.
+        if (typeof c.lid === 'string' && c.lid.endsWith('@lid')) await rememberContact(c.lid, n)
+        kept += 1
+      } catch (err) {
+        logLine('could not record a contact name', err)
       }
     }
+    if (kept) logLine(`address book: ${kept} contact name(s) recorded`)
   }
   sock.ev.on('contacts.upsert', contactEvent)
   sock.ev.on('contacts.update', contactEvent)
+}
+
+/// Re-pulls the address book from WhatsApp on a live socket.
+///
+/// The saved names ride the app-state sync, which only runs automatically
+/// right after pairing — and at that moment none of the chats exist yet. This
+/// is how the names are recovered without making someone scan a QR again.
+export async function resyncContacts(): Promise<{ applied: number; contacts: number }> {
+  const sock = requireReady()
+  const collections = ['critical_unblock_low', 'regular_low', 'regular_high']
+
+  // The stored version has to go back to zero first. Baileys asks WhatsApp
+  // for a full snapshot only when it has no version for a collection
+  // (`return_snapshot: (!state.version)`); with a version in hand the server
+  // returns the patches SINCE it, and after a completed pairing there are
+  // none — which is why an ordinary resync came back with nothing at all.
+  try {
+    await sock.authState.keys.set({
+      'app-state-sync-version': Object.fromEntries(collections.map((c) => [c, null])),
+    })
+  } catch (err) {
+    logLine('could not reset the app-state versions before resyncing contacts', err)
+  }
+
+  await sock.resyncAppState(collections, true)
+  // The events land asynchronously through a buffered emitter; give them a
+  // moment to drain before backfilling names onto chats.
+  await new Promise((r) => setTimeout(r, 4_000))
+  const applied = await applyContactNames()
+  const contacts = await prisma.contact.count()
+  logLine(`address book resync: ${contacts} contact(s) known, ${applied} chat(s) renamed`)
+  return { applied, contacts }
 }
 
 /// Asks WhatsApp for every group the account is in. The one list that can be

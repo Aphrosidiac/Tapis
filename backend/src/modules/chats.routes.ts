@@ -43,12 +43,16 @@ export default async function chatRoutes(app: FastifyInstance) {
       // tracked ones. Chats that have never spoken sort last, then by name so
       // the tail is alphabetical rather than arbitrary.
       orderBy: [{ lastMessageAt: { sort: 'desc', nulls: 'last' } }, { name: 'asc' }],
-      take: 500,
+      // Was 500 while the account held 922 chats, so the screen said
+      // "1 of 500" and 422 conversations simply did not exist as far as
+      // anyone using it could tell.
+      take: 2000,
       include: {
         _count: { select: { rules: { where: { active: true } }, items: { where: { status: { in: ['NEW', 'IN_PROGRESS'] } } }, messages: true } },
       },
     })
-    return { chats: chats.map((c) => ({ ...c, counts: c._count, _count: undefined })) }
+    const total = await prisma.chat.count()
+    return { chats: chats.map((c) => ({ ...c, counts: c._count, _count: undefined })), total }
   })
 
   app.get('/api/chats/:id', async (request, reply) => {
