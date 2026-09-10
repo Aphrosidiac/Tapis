@@ -121,8 +121,8 @@ const STATUS_TONE: Record<string, 'ok' | 'bad' | 'warn' | 'info'> = { DONE: 'ok'
   <div class="rise">
     <PageHeader title="Review" subtitle="What the filter threw away, every pipeline run, and the corrections it has learned from." />
 
-    <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
-      <div class="no-bar flex gap-1 overflow-x-auto rounded-md border border-line-200 bg-surface-0 p-1">
+    <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:flex-nowrap lg:items-center">
+      <div class="no-bar flex gap-1 overflow-x-auto rounded-md border border-line-200 bg-surface-0 p-1 lg:min-w-0">
         <button
           v-for="t2 in [
             ['dismissed', 'Dismissed', total],

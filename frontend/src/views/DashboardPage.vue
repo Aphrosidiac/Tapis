@@ -9,7 +9,6 @@ import StatCard from '../components/base/StatCard.vue'
 import BaseBadge from '../components/base/BaseBadge.vue'
 import BaseButton from '../components/base/BaseButton.vue'
 import EmptyState from '../components/base/EmptyState.vue'
-import Alert from '../components/base/Alert.vue'
 import { MessageSquareText, Send, Search } from 'lucide-vue-next'
 
 interface Item {
@@ -30,13 +29,11 @@ interface Dash {
   pendingMessages: number
   messages7: number
   dismissed7: number
-  failedBundles: number
   pendingDeliveries: number
   cost: { d7: number; d30: number; calls7: number; calls30: number }
   link: { state: string; ready: boolean; me: { id: string; name: string | null } | null; action: string | null; lastInboundAt: string | null }
   llmConfigured: boolean
   provider: string
-  recentFailed: { id: string; chat: string; error: string | null }[]
 }
 
 const { bad } = useToast()
@@ -110,29 +107,6 @@ const noiseShare = computed(() =>
 
 <template>
   <div class="rise">
-    <!-- Things that need a person, before anything else. -->
-    <div v-if="dash" class="mb-5 space-y-3">
-      <Alert v-if="!dash.llmConfigured" tone="danger" title="No model key is configured">
-        Nothing is being analysed. Messages are still being stored and will be processed once a key is added.
-        <RouterLink to="/settings" class="font-medium text-primary-700 underline">Add a key in Settings</RouterLink>.
-      </Alert>
-      <Alert v-else-if="dash.provider === 'mock'" tone="warning" title="The mock provider is selected">
-        No model is called and every brief says MOCK.
-        <RouterLink to="/settings" class="font-medium text-primary-700 underline">Choose a real provider</RouterLink>
-        before trusting anything here.
-      </Alert>
-      <Alert v-if="!dash.link.ready" tone="warning" :title="`WhatsApp is ${dash.link.state.replace('-', ' ')}`">
-        {{ dash.link.action || 'Messages are not arriving.' }}
-        <RouterLink to="/whatsapp" class="font-medium text-primary-700 underline">Open the link page</RouterLink>.
-      </Alert>
-      <Alert v-if="dash.recentFailed.length" tone="danger" :title="`${dash.failedBundles} pipeline run${dash.failedBundles === 1 ? '' : 's'} failed`">
-        <p v-for="b in dash.recentFailed" :key="b.id" class="truncate">
-          <span class="font-medium text-ink-800">{{ b.chat }}:</span> {{ b.error }}
-        </p>
-        <RouterLink to="/review" class="font-medium text-primary-700 underline">Review and retry</RouterLink>
-      </Alert>
-    </div>
-
     <div class="mb-5 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-6">
       <StatCard label="Open items" :value="openCount" :hint="`${dash?.items.NEW ?? 0} new · ${dash?.items.IN_PROGRESS ?? 0} in progress`" tone="accent" />
       <StatCard label="Done" :value="dash?.items.DONE ?? 0" :hint="`${dash?.items.DISMISSED ?? 0} dismissed`" />
@@ -147,8 +121,8 @@ const noiseShare = computed(() =>
       <StatCard label="Model cost, 7 days" :value="usd(dash?.cost.d7 ?? 0)" :hint="`${dash?.cost.calls7 ?? 0} calls · ${usd(dash?.cost.d30 ?? 0)} over 30 days`" />
     </div>
 
-    <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
-      <div class="no-bar flex gap-1 overflow-x-auto rounded-md border border-line-200 bg-surface-0 p-1">
+    <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:flex-nowrap lg:items-center">
+      <div class="no-bar flex gap-1 overflow-x-auto rounded-md border border-line-200 bg-surface-0 p-1 lg:min-w-0">
         <button
           v-for="t in TABS"
           :key="t.key"

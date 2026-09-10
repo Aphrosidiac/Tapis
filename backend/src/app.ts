@@ -16,6 +16,7 @@ import itemRoutes from './modules/items.routes.js'
 import reviewRoutes from './modules/review.routes.js'
 import settingsRoutes from './modules/settings.routes.js'
 import dashboardRoutes from './modules/dashboard.routes.js'
+import noticeRoutes from './modules/notices.routes.js'
 import devRoutes from './modules/dev.routes.js'
 
 export interface BuildOptions {
@@ -56,6 +57,7 @@ export async function buildApp(opts: BuildOptions = {}) {
   await app.register(reviewRoutes)
   await app.register(settingsRoutes)
   await app.register(dashboardRoutes)
+  await app.register(noticeRoutes)
   await app.register(devRoutes)
 
   // The built frontend, when it exists. Any non-API path is the SPA.

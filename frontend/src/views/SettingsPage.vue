@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { api, errorMessage } from '../lib/api'
 import { useToast } from '../composables/useToast'
 import { useAuthStore } from '../stores/auth'
+import { useNoticesStore } from '../stores/notices'
 import PageHeader from '../components/base/PageHeader.vue'
 import Card from '../components/base/Card.vue'
 import Alert from '../components/base/Alert.vue'
@@ -34,6 +35,7 @@ interface Model { key: string; label: string; anthropic: string; openrouter: str
 
 const { ok, bad } = useToast()
 const auth = useAuthStore()
+const notices = useNoticesStore()
 const s = ref<Settings | null>(null)
 const models = ref<Model[]>([])
 const form = reactive<Partial<Settings>>({})
@@ -81,6 +83,7 @@ async function save() {
     const { data } = await api.put<{ settings: Settings }>('/settings', form)
     s.value = data.settings
     Object.assign(form, data.settings)
+    void notices.refresh()
     ok('Settings saved')
   } catch (e) {
     bad(errorMessage(e))
@@ -94,6 +97,7 @@ async function saveKey(p: 'anthropic' | 'openrouter') {
     const { data } = await api.post<{ settings: Settings }>(`/settings/keys/${p}`, { key: keys[p] })
     s.value = data.settings
     keys[p] = ''
+    void notices.refresh()
     ok('Key saved, encrypted at rest')
   } catch (e) {
     bad(errorMessage(e))
@@ -106,6 +110,7 @@ async function clearKey(p: 'anthropic' | 'openrouter') {
   try {
     const { data } = await api.delete<{ settings: Settings }>(`/settings/keys/${p}`)
     s.value = data.settings
+    void notices.refresh()
     ok('Stored key removed')
   } catch (e) {
     bad(errorMessage(e))

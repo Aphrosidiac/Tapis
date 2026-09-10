@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import Sidebar from './Sidebar.vue'
 import Navbar from './Navbar.vue'
 import { useLinkStore } from '../../stores/link'
+import { useNoticesStore } from '../../stores/notices'
 import { usePolling } from '../../composables/usePolling'
 
 const route = useRoute()
@@ -14,7 +15,11 @@ const navOpen = ref(false)
 watch(() => route.fullPath, () => { navOpen.value = false })
 
 const link = useLinkStore()
-usePolling(() => link.refresh(), 20_000)
+const notices = useNoticesStore()
+usePolling(() => {
+  void link.refresh()
+  void notices.refresh()
+}, 20_000)
 </script>
 
 <template>

@@ -4,6 +4,7 @@ import { api, errorMessage } from '../lib/api'
 import { useToast } from '../composables/useToast'
 import { usePolling } from '../composables/usePolling'
 import { useLinkStore, type LinkStatus } from '../stores/link'
+import { useNoticesStore } from '../stores/notices'
 import { fmtDateTime, ago } from '../lib/format'
 import PageHeader from '../components/base/PageHeader.vue'
 import Card from '../components/base/Card.vue'
@@ -15,6 +16,7 @@ import { QrCode, Smartphone, Unlink, Square } from 'lucide-vue-next'
 
 const { ok, bad } = useToast()
 const store = useLinkStore()
+const notices = useNoticesStore()
 const link = computed(() => store.link)
 const busy = ref('')
 const pair = reactive({ number: '' })
@@ -37,6 +39,7 @@ async function call(path: string, label: string, body: Record<string, unknown> =
   try {
     const { data } = await api.post<{ link: LinkStatus }>(`/whatsapp/${path}`, body)
     store.set(data.link)
+    void notices.refresh()
     if (label === 'unlink') ok(data.link.ghostDevice ? 'Keys removed, but the phone still lists the device — see the note.' : 'Unlinked')
   } catch (e) {
     bad(errorMessage(e))

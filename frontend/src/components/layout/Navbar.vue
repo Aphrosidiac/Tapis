@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import { useLinkStore } from '../../stores/link'
 import { Menu, LogOut } from 'lucide-vue-next'
+import NoticeBell from './NoticeBell.vue'
 
 defineProps<{ title: string }>()
 defineEmits<{ toggleSidebar: [] }>()
@@ -49,6 +50,7 @@ function logout() {
     </RouterLink>
     <!-- Icon-only below sm, so it needs a square of its own rather than the
          width its (hidden) label would have given it. -->
+    <NoticeBell />
     <button
       class="-mr-2 inline-flex h-10 min-w-10 shrink-0 items-center justify-center gap-1.5 rounded-sm px-2 text-[14px] text-ink-500 hover:text-ink-900"
       aria-label="Sign out"
