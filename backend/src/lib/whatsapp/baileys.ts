@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, rmSync } from 'fs'
 import { WA_SESSION_DIR, ensureWaSessionDir } from '../paths.js'
-import { parseInbound, jidFor, unwrap, type ParsedInbound } from './inbound.js'
+import { parseInbound, jidFor, unwrap, historyChats, type ParsedInbound } from './inbound.js'
 import { handleInbound, discoverChat } from './ingest.js'
 import prisma from '../prisma.js'
 
@@ -559,40 +559,30 @@ function wireDiscovery(sock: any) {
   sock.ev.on('messaging-history.set', async (payload: any) => {
     touch()
     // Logged on SUCCESS, not only on failure. This is the only event that
-    // can tell us when a chat last spoke — `groupFetchAllParticipating`
-    // returns no timestamps at all — so when 196 of 199 chats show "never",
-    // the first question is whether WhatsApp sent any history and the
-    // second is whether we dropped it. With no line here, those two look
-    // identical, which is precisely the shape of the LID bug.
+    // carries the chat list, the one-to-one chats and when each last spoke;
+    // `groupFetchAllParticipating` returns groups and no timestamps. With no
+    // line here, "WhatsApp sent nothing" and "we dropped it" look identical.
     logLine(
       `history sync: ${payload?.chats?.length ?? 0} chats, ${payload?.contacts?.length ?? 0} contacts, ` +
         `${payload?.messages?.length ?? 0} messages, syncType=${payload?.syncType ?? '?'}, progress=${payload?.progress ?? '?'}, latest=${!!payload?.isLatest}`,
     )
     try {
-      const names = new Map<string, string>()
+      const found = historyChats(payload)
+      for (const c of found) await discoverChat(c)
+
+      // A contact's name only matters for a chat we already know about; a
+      // contact on its own is not a conversation.
+      const seen = new Set(found.map((c) => c.jid))
       for (const c of payload?.contacts ?? []) {
-        const n = contactName(c)
-        if (c?.id && n) names.set(c.id, n)
-      }
-      for (const chat of payload?.chats ?? []) {
-        const jid: string | undefined = chat?.id
-        if (!jid || jid === 'status@broadcast' || jid.endsWith('@newsletter') || jid.endsWith('@broadcast')) continue
-        const isGroup = jid.endsWith('@g.us')
-        const ts = Number(chat.conversationTimestamp?.low ?? chat.conversationTimestamp ?? 0)
-        await discoverChat({
-          jid,
-          name: chat.name || names.get(jid) || null,
-          isGroup,
-          lastMessageAt: ts > 0 ? new Date(ts * 1000) : null,
-        })
-      }
-      for (const [jid, name] of names) {
-        if (!jid.endsWith('@s.whatsapp.net')) continue
+        const name = contactName(c)
+        const jid: string | undefined = c?.id
+        if (!name || !jid || seen.has(jid) || !jid.endsWith('@s.whatsapp.net')) continue
         const existing = await prisma.chat.findUnique({ where: { jid } })
         if (existing) await discoverChat({ jid, name, isGroup: false })
       }
+
       const dated = await prisma.chat.count({ where: { lastMessageAt: { not: null } } })
-      logLine(`history sync applied: ${dated} chats now have a last-message time`)
+      logLine(`history sync applied: ${found.filter((c) => c.lastMessageAt).length} timed here, ${dated} dated overall`)
     } catch (err) {
       logLine('could not record chats from history sync', err)
     }

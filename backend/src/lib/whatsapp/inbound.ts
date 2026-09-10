@@ -181,3 +181,78 @@ export function jidFor(waId: string): string {
   if (waId.includes('@')) return waId
   return `${waId.replace(/[^0-9]/g, '')}@s.whatsapp.net`
 }
+
+
+// ── History sync ───────────────────────────────────────────────────────────
+
+/// WhatsApp timestamps arrive as a protobuf Long ({low, high}), a string, or
+/// a plain number depending on the field and which codec path decoded it.
+/// Reading `.low` alone looked correct and quietly produced 0 for every chat
+/// in a real history sync, which is how 199 chats ended up with no time.
+export function waSeconds(v: any): number {
+  if (v === null || v === undefined) return 0
+  if (typeof v === 'number') return Number.isFinite(v) ? Math.floor(v) : 0
+  if (typeof v === 'string') {
+    const n = Number(v)
+    return Number.isFinite(n) ? Math.floor(n) : 0
+  }
+  if (typeof v.toNumber === 'function') {
+    const n = v.toNumber()
+    return Number.isFinite(n) ? Math.floor(n) : 0
+  }
+  if (typeof v.low === 'number') return v.low + (typeof v.high === 'number' ? v.high * 4294967296 : 0)
+  return 0
+}
+
+export interface HistoryChat {
+  jid: string
+  name: string | null
+  isGroup: boolean
+  lastMessageAt: Date | null
+}
+
+const UNINTERESTING = (jid: string) =>
+  jid === 'status@broadcast' || jid.endsWith('@newsletter') || jid.endsWith('@broadcast')
+
+/// Everything a history-sync payload says about which conversations exist and
+/// when each last spoke.
+///
+/// Two sources, because the obvious one is empty: a real RECENT sync
+/// delivered 16 chats and 15,000 messages, and not one of those chats carried
+/// a `conversationTimestamp`. The messages — which this used to throw away —
+/// are the reliable source, and they also reveal the one-to-one chats that
+/// the group fetch cannot see.
+export function historyChats(payload: any): HistoryChat[] {
+  const names = new Map<string, string>()
+  for (const c of payload?.contacts ?? []) {
+    const n = c?.name || c?.notify || c?.verifiedName || null
+    if (c?.id && n) names.set(c.id, n)
+  }
+
+  const lastAt = new Map<string, number>()
+  const note = (jid: unknown, secs: number) => {
+    if (typeof jid !== 'string' || !jid || !secs) return
+    if (UNINTERESTING(jid)) return
+    if (secs > (lastAt.get(jid) ?? 0)) lastAt.set(jid, secs)
+  }
+
+  const meta = new Map<string, { name: string | null; isGroup: boolean }>()
+  for (const chat of payload?.chats ?? []) {
+    const jid: string | undefined = chat?.id
+    if (!jid || UNINTERESTING(jid)) continue
+    meta.set(jid, { name: chat.name || names.get(jid) || null, isGroup: jid.endsWith('@g.us') })
+    note(jid, waSeconds(chat.conversationTimestamp))
+  }
+  for (const m of payload?.messages ?? []) note(m?.key?.remoteJid, waSeconds(m?.messageTimestamp))
+
+  return [...new Set([...meta.keys(), ...lastAt.keys()])].map((jid) => {
+    const m = meta.get(jid)
+    const secs = lastAt.get(jid) ?? 0
+    return {
+      jid,
+      name: m?.name ?? names.get(jid) ?? null,
+      isGroup: m?.isGroup ?? jid.endsWith('@g.us'),
+      lastMessageAt: secs ? new Date(secs * 1000) : null,
+    }
+  })
+}
