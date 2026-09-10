@@ -1,0 +1,370 @@
+// Tapis — WhatsApp chatter → actionable items.
+// Conventions: uuid ids, snake_case columns via @map, originals never altered.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Access ─────────────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("users")
+}
+
+/// Operator-editable configuration. Secrets are stored encrypted (see
+/// lib/secrets.ts); the environment is a per-field fallback.
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("app_settings")
+}
+
+// ─── Chats ──────────────────────────────────────────────────────────────────
+
+/// A WhatsApp group or private chat the linked account can see. Discovered
+/// from the group list and from traffic; only `tracked` chats have their
+/// messages stored. An untracked chat keeps nothing but its name.
+model Chat {
+  id        String  @id @default(uuid())
+  jid       String  @unique
+  name      String
+  isGroup   Boolean @default(false) @map("is_group")
+  tracked   Boolean @default(false)
+  /// Operator-supplied context the models read.
+  clientName  String? @map("client_name")
+  description String?
+  /// When the operator turned tracking on; messages before this are ignored.
+  trackedSince DateTime? @map("tracked_since")
+  participantCount Int? @map("participant_count")
+  lastMessageAt DateTime? @map("last_message_at")
+  lastSeenAt    DateTime  @default(now()) @map("last_seen_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  rules        Rule[]
+  participants Participant[]
+  messages     Message[]
+  bundles      Bundle[]
+  items        Item[]
+  feedback     Feedback[]
+
+  @@index([tracked, lastMessageAt])
+  @@map("chats")
+}
+
+/// Someone who has spoken in a chat. Keyed on the phone number when WhatsApp
+/// gives one, else the LID with a `lid:` prefix (see lib/whatsapp/inbound.ts).
+model Participant {
+  id         String   @id @default(uuid())
+  chatId     String   @map("chat_id")
+  chat       Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  waId       String   @map("wa_id")
+  name       String?
+  messageCount Int    @default(0) @map("message_count")
+  lastSeenAt DateTime @default(now()) @map("last_seen_at")
+
+  @@unique([chatId, waId])
+  @@map("participants")
+}
+
+// ─── Rules ──────────────────────────────────────────────────────────────────
+
+/// A plain-language tracking rule. Free-form on purpose: the text IS the
+/// category. `senderWaIds` empty means the whole chat.
+model Rule {
+  id         String   @id @default(uuid())
+  chatId     String   @map("chat_id")
+  chat       Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  text       String
+  /// Extra things the analysis should produce for matches, in plain language.
+  extraAsk   String?  @map("extra_ask")
+  senderWaIds String[] @default([]) @map("sender_wa_ids")
+  toDashboard Boolean @default(true) @map("to_dashboard")
+  /// WhatsApp numbers (international digits) that receive matches.
+  toWhatsapp String[] @default([]) @map("to_whatsapp")
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  items      ItemRule[]
+  deliveries Delivery[]
+
+  @@index([chatId, active])
+  @@map("rules")
+}
+
+// ─── Messages ───────────────────────────────────────────────────────────────
+
+enum MessageType {
+  TEXT
+  IMAGE
+  VIDEO
+  AUDIO
+  DOCUMENT
+  STICKER
+  LOCATION
+  CONTACT
+  OTHER
+}
+
+enum FilterStatus {
+  PENDING    // stored, not yet bundled
+  DISMISSED  // first pass: noise
+  FLAGGED    // first pass: worth analysing (analysis may still not act on it)
+  ATTACHED   // second pass linked it to an item
+  SKIPPED    // never filtered (from me, or arrived before tracking)
+}
+
+/// The exact original. `text` is never rewritten; translations and summaries
+/// live on the item.
+model Message {
+  id           String       @id @default(uuid())
+  chatId       String       @map("chat_id")
+  chat         Chat         @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  waMessageId  String       @map("wa_message_id")
+  senderWaId   String       @map("sender_wa_id")
+  senderName   String?      @map("sender_name")
+  fromMe       Boolean      @default(false) @map("from_me")
+  type         MessageType  @default(TEXT)
+  text         String?
+  mediaPath    String?      @map("media_path")
+  mediaMime    String?      @map("media_mime")
+  quotedWaMessageId String? @map("quoted_wa_message_id")
+  sentAt       DateTime     @map("sent_at")
+  receivedAt   DateTime     @default(now()) @map("received_at")
+  /// Where an inbound came from: live socket, or the simulator.
+  simulated    Boolean      @default(false)
+
+  filterStatus FilterStatus @default(PENDING) @map("filter_status")
+  filterReason String?      @map("filter_reason")
+  filterRuleIds String[]    @default([]) @map("filter_rule_ids")
+  bundleId     String?      @map("bundle_id")
+  bundle       Bundle?      @relation(fields: [bundleId], references: [id], onDelete: SetNull)
+  /// Set when an operator rescued a dismissed message.
+  rescuedAt    DateTime?    @map("rescued_at")
+
+  itemLinks    ItemMessage[]
+  feedback     Feedback[]
+
+  @@unique([chatId, waMessageId])
+  @@index([chatId, filterStatus, sentAt])
+  @@index([chatId, sentAt])
+  @@map("messages")
+}
+
+// ─── Pipeline ───────────────────────────────────────────────────────────────
+
+enum BundleStatus {
+  FILTERING
+  ANALYZING
+  DONE
+  FAILED
+}
+
+/// One pass of the pipeline over a batch of messages in one chat.
+model Bundle {
+  id           String       @id @default(uuid())
+  chatId       String       @map("chat_id")
+  chat         Chat         @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  status       BundleStatus @default(FILTERING)
+  /// Why this bundle was cut: quiet, size, age, manual, rescue.
+  trigger      String
+  messageCount Int          @default(0) @map("message_count")
+  flaggedCount Int          @default(0) @map("flagged_count")
+  itemsCreated Int          @default(0) @map("items_created")
+  itemsUpdated Int          @default(0) @map("items_updated")
+  error        String?
+  createdAt    DateTime     @default(now()) @map("created_at")
+  completedAt  DateTime?    @map("completed_at")
+
+  messages Message[]
+  llmCalls LlmCall[]
+
+  @@index([chatId, createdAt])
+  @@map("bundles")
+}
+
+enum LlmKind {
+  FILTER
+  ANALYZE
+}
+
+/// Every model call, so the cost of the pipeline is a number on a screen and
+/// not a surprise on an invoice.
+model LlmCall {
+  id           String   @id @default(uuid())
+  kind         LlmKind
+  model        String
+  bundleId     String?  @map("bundle_id")
+  bundle       Bundle?  @relation(fields: [bundleId], references: [id], onDelete: SetNull)
+  inputTokens  Int      @default(0) @map("input_tokens")
+  outputTokens Int      @default(0) @map("output_tokens")
+  cacheReadTokens Int   @default(0) @map("cache_read_tokens")
+  cacheWriteTokens Int  @default(0) @map("cache_write_tokens")
+  latencyMs    Int      @default(0) @map("latency_ms")
+  ok           Boolean  @default(true)
+  error        String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("llm_calls")
+}
+
+// ─── Items ──────────────────────────────────────────────────────────────────
+
+enum ItemStatus {
+  NEW
+  IN_PROGRESS
+  DONE
+  DISMISSED
+}
+
+enum Priority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+model Item {
+  id         String     @id @default(uuid())
+  chatId     String     @map("chat_id")
+  chat       Chat       @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  title      String
+  brief      String
+  suggestion String
+  /// Whatever the rule's extraAsk requested, as label/value pairs.
+  extra      Json       @default("[]")
+  status     ItemStatus @default(NEW)
+  priority   Priority   @default(NORMAL)
+  firstMessageAt DateTime @map("first_message_at")
+  lastActivityAt DateTime @map("last_activity_at")
+  createdAt  DateTime   @default(now()) @map("created_at")
+  updatedAt  DateTime   @updatedAt @map("updated_at")
+
+  rules      ItemRule[]
+  messages   ItemMessage[]
+  events     ItemEvent[]
+  deliveries Delivery[]
+
+  @@index([chatId, status, lastActivityAt])
+  @@index([status, lastActivityAt])
+  @@map("items")
+}
+
+model ItemRule {
+  itemId String @map("item_id")
+  item   Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  ruleId String @map("rule_id")
+  rule   Rule   @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@id([itemId, ruleId])
+  @@map("item_rules")
+}
+
+enum LinkKind {
+  ORIGIN       // one of the messages the item was created from
+  DETAIL       // extra information about the same issue
+  STATUS_CHECK // "is this done yet?"
+  FOLLOW_UP    // anything else about the same issue
+}
+
+model ItemMessage {
+  id        String   @id @default(uuid())
+  itemId    String   @map("item_id")
+  item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  messageId String   @map("message_id")
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  kind      LinkKind @default(ORIGIN)
+  /// The analysis's one-line note on what this message adds.
+  note      String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([itemId, messageId])
+  @@map("item_messages")
+}
+
+enum EventKind {
+  CREATED
+  UPDATED
+  STATUS
+  DELIVERED
+  DELIVERY_FAILED
+  RESCUED
+  NOTE
+}
+
+model ItemEvent {
+  id        String    @id @default(uuid())
+  itemId    String    @map("item_id")
+  item      Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  kind      EventKind
+  detail    String
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([itemId, createdAt])
+  @@map("item_events")
+}
+
+// ─── Delivery ───────────────────────────────────────────────────────────────
+
+enum DeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model Delivery {
+  id          String         @id @default(uuid())
+  itemId      String         @map("item_id")
+  item        Item           @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  ruleId      String?        @map("rule_id")
+  rule        Rule?          @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  toWaId      String         @map("to_wa_id")
+  body        String
+  status      DeliveryStatus @default(PENDING)
+  attempts    Int            @default(0)
+  error       String?
+  waMessageId String?        @map("wa_message_id")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  sentAt      DateTime?      @map("sent_at")
+
+  @@index([status, createdAt])
+  @@map("deliveries")
+}
+
+// ─── Learning ───────────────────────────────────────────────────────────────
+
+enum FeedbackKind {
+  RESCUED        // the filter dismissed it; the operator said it mattered
+  FALSE_POSITIVE // an item was dismissed by the operator; its messages were noise
+}
+
+/// Corrections the operator made. Recent ones are shown to the filter as
+/// examples, which is how it learns without any training.
+model Feedback {
+  id        String       @id @default(uuid())
+  chatId    String       @map("chat_id")
+  chat      Chat         @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  messageId String?      @map("message_id")
+  message   Message?     @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  kind      FeedbackKind
+  /// Snapshot of the text, so the example survives the message being deleted.
+  text      String
+  createdAt DateTime     @default(now()) @map("created_at")
+
+  @@index([chatId, createdAt])
+  @@map("feedback")
+}

@@ -1,0 +1,8 @@
+node_modules
+dist
+.env
+.wa-session*
+.credential-key
+media/
+*.log
+.DS_Store

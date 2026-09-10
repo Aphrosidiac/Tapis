@@ -1,0 +1,84 @@
+@import "tailwindcss";
+
+/*
+  Tapis — paper and ink, one teal accent.
+  Dense enough to be worked in all day; every text colour clears 4.5:1 on
+  every ground it sits on.
+*/
+@theme {
+  --font-sans: 'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+
+  --color-canvas: #f5f4ef;   /* the page */
+  --color-surface: #ffffff;  /* cards, sidebar, tables */
+  --color-tint: #faf9f4;     /* hovered rows, selected */
+  --color-inert: #edebe3;    /* disabled, footers, closed states */
+  --color-field: #ffffff;
+  --color-control: #e8e6de;
+  --color-control-hover: #dfdcd2;
+
+  --color-ink: #171717;
+  --color-muted: #555555;
+  --color-faint: #6b6b6b;
+  --color-line: rgb(23 23 23 / 0.13);
+  --color-hair: rgb(23 23 23 / 0.07);
+
+  --color-accent: #0f766e;
+  --color-accent-strong: #0b5f59;
+  --color-accent-soft: #e3f1ef;
+
+  --color-ok: #1b6b44;
+  --color-warn: #7e5700;
+  --color-bad: #b3261e;
+  --color-info: #2a5d8f;
+  --color-dormant: #bdbcb6;
+
+  --animate-page-in: pageIn 0.25s ease-out;
+  --animate-fade-in: fadeIn 0.2s ease-out;
+  @keyframes pageIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+}
+
+body {
+  font-family: var(--font-sans);
+  font-weight: 450;
+  -webkit-font-smoothing: antialiased;
+  color: var(--color-ink);
+  background: var(--color-canvas);
+  font-size: 13px;
+}
+
+a, button, input, select, textarea, summary, [role='button'], tbody tr {
+  transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, color 0.15s ease-in-out, opacity 0.15s ease-in-out;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 10.5px;
+  font-weight: 650;
+  color: var(--color-muted);
+}
+.tabular { font-variant-numeric: tabular-nums; }
+
+.tab { border-bottom: 2px solid transparent; color: var(--color-muted); }
+.tab:hover { color: var(--color-ink); }
+.tab-on { border-color: var(--color-ink); color: var(--color-ink); font-weight: 650; }
+
+/* Originals are shown exactly; long words from clients must wrap, not overflow. */
+.original { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.skeleton { position: relative; overflow: hidden; background: var(--color-hair); border-radius: 4px; }
+
+@media (pointer: coarse) {
+  button, [role='button'], select, summary, input:not([type='checkbox']):not([type='radio']) { min-height: 40px; }
+  input, select, textarea { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
