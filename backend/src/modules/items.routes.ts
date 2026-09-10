@@ -11,7 +11,12 @@ const LIST_INCLUDE = {
   chat: { select: { id: true, name: true, clientName: true, isGroup: true } },
   rules: { select: { rule: { select: { id: true, text: true } } } },
   _count: { select: { messages: true, deliveries: true } },
+  /// Whether the client has come back to ask whether this is done. One row
+  /// is enough — the list only needs to know that it happened and when.
+  messages: { where: { kind: 'STATUS_CHECK' as const }, orderBy: { createdAt: 'desc' as const }, take: 1, select: { createdAt: true } },
 } as const
+
+const OPEN = ['NEW', 'IN_PROGRESS'] as const
 
 export default async function itemRoutes(app: FastifyInstance) {
   app.addHook('preHandler', authenticate)
@@ -21,20 +26,50 @@ export default async function itemRoutes(app: FastifyInstance) {
     const page = int(q.page, 1, 1)
     const limit = int(q.limit, 100, 1, 500)
     const statuses = (q.status ?? '').split(',').filter((s) => (STATUSES as readonly string[]).includes(s))
+    const priorities = (q.priority ?? '').split(',').filter((p) => (PRIORITIES as readonly string[]).includes(p))
+
+    /// The three triage views. Each one answers a question an owner actually
+    /// has — who is chasing me, what have I left sitting, what is on fire —
+    /// and each is a filter over OPEN items, because a done item cannot need
+    /// anything.
+    const view = q.view
+    const staleBefore = new Date(Date.now() - int(q.staleHours, 48, 1, 24 * 365) * 3_600_000)
+    const viewWhere =
+      view === 'chased'
+        ? { status: { in: OPEN as unknown as never[] }, messages: { some: { kind: 'STATUS_CHECK' as never } } }
+        : view === 'stale'
+          ? { status: { in: OPEN as unknown as never[] }, lastActivityAt: { lt: staleBefore } }
+          : view === 'urgent'
+            ? { status: { in: OPEN as unknown as never[] }, priority: { in: ['HIGH', 'URGENT'] as never[] } }
+            : {}
+
     const where = {
-      ...(statuses.length ? { status: { in: statuses as never[] } } : {}),
+      // A view is about open work, so it wins over whichever tab was left on.
+      ...(statuses.length && !view ? { status: { in: statuses as never[] } } : {}),
+      ...viewWhere,
       ...(q.chatId ? { chatId: q.chatId } : {}),
       ...(q.client ? { chat: { clientName: q.client } } : {}),
       ...(q.ruleId ? { rules: { some: { ruleId: q.ruleId } } } : {}),
-      ...(q.priority && (PRIORITIES as readonly string[]).includes(q.priority) ? { priority: q.priority as never } : {}),
+      ...(priorities.length && !view ? { priority: { in: priorities as never[] } } : {}),
       ...(q.q ? { OR: [{ title: { contains: q.q, mode: 'insensitive' as const } }, { brief: { contains: q.q, mode: 'insensitive' as const } }] } : {}),
     }
+
+    // Stalest first when triaging by age: the point of the view is the top row.
+    const orderBy = view === 'stale' ? { lastActivityAt: 'asc' as const } : { lastActivityAt: 'desc' as const }
+
     const [items, total] = await Promise.all([
-      prisma.item.findMany({ where, orderBy: { lastActivityAt: 'desc' }, skip: (page - 1) * limit, take: limit, include: LIST_INCLUDE }),
+      prisma.item.findMany({ where, orderBy, skip: (page - 1) * limit, take: limit, include: LIST_INCLUDE }),
       prisma.item.count({ where }),
     ])
     return {
-      items: items.map((i) => ({ ...i, rules: i.rules.map((r) => r.rule), counts: i._count, _count: undefined })),
+      items: items.map((i) => ({
+        ...i,
+        rules: i.rules.map((r) => r.rule),
+        counts: i._count,
+        chasedAt: i.messages[0]?.createdAt ?? null,
+        _count: undefined,
+        messages: undefined,
+      })),
       total,
       page,
       limit,

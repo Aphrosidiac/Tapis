@@ -13,6 +13,10 @@ export default async function dashboardRoutes(app: FastifyInstance) {
   app.get('/api/dashboard', async () => {
     const since7 = new Date(Date.now() - 7 * 86_400_000)
     const since30 = new Date(Date.now() - 30 * 86_400_000)
+    const OPEN = { in: ['NEW', 'IN_PROGRESS'] as never[] }
+    // 48 hours: a client who asked on Monday and hears nothing by Wednesday
+    // has been ignored, whatever the ticket says.
+    const staleBefore = new Date(Date.now() - 48 * 3_600_000)
     const [byStatus, trackedChats, pendingMessages, dismissed7, stored7, failedBundles, pendingDeliveries, calls30, recentFailed] = await Promise.all([
       prisma.item.groupBy({ by: ['status'], _count: { _all: true } }),
       prisma.chat.count({ where: { tracked: true } }),
@@ -41,9 +45,61 @@ export default async function dashboardRoutes(app: FastifyInstance) {
     const counts: Record<string, number> = { NEW: 0, IN_PROGRESS: 0, DONE: 0, DISMISSED: 0 }
     for (const s of byStatus) counts[s.status] = s._count._all
 
+    /// Triage. Three questions an owner actually has, each one a filter you
+    /// can click, rather than six numbers about the machine.
+    const [chasedItems, staleItems, urgentItems] = await Promise.all([
+      // Someone came back to ask whether it is done yet. The single highest
+      // signal event in the product: the client is already unhappy enough to
+      // chase, and we still have it open.
+      prisma.item.findMany({
+        where: { status: OPEN, messages: { some: { kind: 'STATUS_CHECK' } } },
+        orderBy: { lastActivityAt: 'desc' },
+        select: { id: true, title: true, lastActivityAt: true, chat: { select: { name: true, clientName: true } } },
+        take: 50,
+      }),
+      prisma.item.findMany({
+        where: { status: OPEN, lastActivityAt: { lt: staleBefore } },
+        orderBy: { lastActivityAt: 'asc' },
+        select: { id: true, title: true, lastActivityAt: true, chat: { select: { name: true, clientName: true } } },
+        take: 50,
+      }),
+      prisma.item.findMany({
+        where: { status: OPEN, priority: { in: ['HIGH', 'URGENT'] } },
+        orderBy: [{ priority: 'desc' }, { lastActivityAt: 'desc' }],
+        select: { id: true, title: true, priority: true, chat: { select: { name: true, clientName: true } } },
+        take: 50,
+      }),
+    ])
+
+    const who = (rows: { chat: { name: string; clientName: string | null } }[]) => [
+      ...new Set(rows.map((r) => r.chat.clientName || r.chat.name)),
+    ]
+
+    const triage = {
+      chased: {
+        count: chasedItems.length,
+        clients: who(chasedItems).slice(0, 3),
+        moreClients: Math.max(0, who(chasedItems).length - 3),
+      },
+      stale: {
+        count: staleItems.length,
+        clients: who(staleItems).slice(0, 3),
+        moreClients: Math.max(0, who(staleItems).length - 3),
+        // The age of the worst one, which is the number that shames you.
+        oldestHours: staleItems.length ? Math.floor((Date.now() - staleItems[0].lastActivityAt.getTime()) / 3_600_000) : 0,
+      },
+      urgent: {
+        count: urgentItems.length,
+        urgentCount: urgentItems.filter((i) => i.priority === 'URGENT').length,
+        clients: who(urgentItems).slice(0, 3),
+        moreClients: Math.max(0, who(urgentItems).length - 3),
+      },
+    }
+
     const link = baileysStatus()
     return {
       items: counts,
+      triage,
       trackedChats,
       pendingMessages,
       messages7: stored7,
