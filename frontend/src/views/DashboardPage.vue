@@ -163,7 +163,9 @@ const noiseShare = computed(() =>
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center lg:ml-auto">
         <div class="flex items-center gap-2">
           <span class="shrink-0 text-[13px] leading-[18px] text-ink-500">Group by</span>
-          <div class="no-bar flex flex-1 gap-1 overflow-x-auto rounded-md border border-line-200 bg-surface-0 p-1">
+          <!-- flex-1 only while stacked. Left on at desktop it grew to fill
+               the row and pushed the whole control group onto a second line. -->
+          <div class="no-bar flex flex-1 gap-1 overflow-x-auto rounded-md border border-line-200 bg-surface-0 p-1 sm:flex-none">
             <button
               v-for="g in ['client', 'chat', 'rule', 'none']"
               :key="g"
