@@ -145,9 +145,14 @@ const FILTERS = [
         >
           <BaseToggle :model-value="c.tracked" :label="`Read ${c.name}`" @update:model-value="(v) => toggle(c, v)" />
           <RouterLink :to="`/chats/${c.id}`" class="min-w-0">
-            <p class="flex items-center gap-2 truncate text-[15px] font-medium leading-[22px] text-ink-900">
+            <!-- The truncate has to sit on the TEXT, not on the flex row. On
+                 the row it clips without an ellipsis, because text-overflow
+                 does not apply to an anonymous flex item — real group names
+                 like "(S1 - S3) DAT10102 HUMAN COMPUTER INTERACTIO" just
+                 stopped mid-word. -->
+            <p class="flex items-center gap-2 text-[15px] font-medium leading-[22px] text-ink-900">
               <component :is="c.isGroup ? Users : User" class="size-4 shrink-0 text-ink-400" :stroke-width="1.5" />
-              {{ c.name }}
+              <span class="truncate">{{ c.name }}</span>
             </p>
             <p class="truncate text-[13px] leading-[18px] text-ink-500">
               {{ c.isGroup ? `Group${c.participantCount ? ` · ${c.participantCount} members` : ''}` : 'Private chat' }}

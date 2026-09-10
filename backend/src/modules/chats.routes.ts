@@ -36,7 +36,13 @@ export default async function chatRoutes(app: FastifyInstance) {
         ...(q.tracked === 'true' ? { tracked: true } : q.tracked === 'false' ? { tracked: false } : {}),
         ...(q.q ? { OR: [{ name: { contains: q.q, mode: 'insensitive' } }, { clientName: { contains: q.q, mode: 'insensitive' } }, { jid: { contains: q.q } }] } : {}),
       },
-      orderBy: [{ tracked: 'desc' }, { lastMessageAt: { sort: 'desc', nulls: 'last' } }],
+      // Most recent first, full stop. Pinning tracked chats to the top put a
+      // chat that last spoke 14 hours ago above one that spoke 6 minutes ago,
+      // which is backwards when the list's job is "who just said something,
+      // should I be reading them". The Reading tab is how you get back to the
+      // tracked ones. Chats that have never spoken sort last, then by name so
+      // the tail is alphabetical rather than arbitrary.
+      orderBy: [{ lastMessageAt: { sort: 'desc', nulls: 'last' } }, { name: 'asc' }],
       take: 500,
       include: {
         _count: { select: { rules: { where: { active: true } }, items: { where: { status: { in: ['NEW', 'IN_PROGRESS'] } } }, messages: true } },
