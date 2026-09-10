@@ -541,6 +541,16 @@ function contactName(c: any): string | null {
 function wireDiscovery(sock: any) {
   sock.ev.on('messaging-history.set', async (payload: any) => {
     touch()
+    // Logged on SUCCESS, not only on failure. This is the only event that
+    // can tell us when a chat last spoke — `groupFetchAllParticipating`
+    // returns no timestamps at all — so when 196 of 199 chats show "never",
+    // the first question is whether WhatsApp sent any history and the
+    // second is whether we dropped it. With no line here, those two look
+    // identical, which is precisely the shape of the LID bug.
+    logLine(
+      `history sync: ${payload?.chats?.length ?? 0} chats, ${payload?.contacts?.length ?? 0} contacts, ` +
+        `${payload?.messages?.length ?? 0} messages, syncType=${payload?.syncType ?? '?'}, progress=${payload?.progress ?? '?'}, latest=${!!payload?.isLatest}`,
+    )
     try {
       const names = new Map<string, string>()
       for (const c of payload?.contacts ?? []) {
@@ -564,6 +574,8 @@ function wireDiscovery(sock: any) {
         const existing = await prisma.chat.findUnique({ where: { jid } })
         if (existing) await discoverChat({ jid, name, isGroup: false })
       }
+      const dated = await prisma.chat.count({ where: { lastMessageAt: { not: null } } })
+      logLine(`history sync applied: ${dated} chats now have a last-message time`)
     } catch (err) {
       logLine('could not record chats from history sync', err)
     }
