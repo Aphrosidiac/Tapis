@@ -1,24 +1,35 @@
 <script setup lang="ts">
 import { useToast } from '../../composables/useToast'
 import { X } from 'lucide-vue-next'
+
 const { toasts, dismiss } = useToast()
-const tone: Record<string, string> = { ok: 'border-l-ok', bad: 'border-l-bad', info: 'border-l-accent' }
+const bar: Record<string, string> = { ok: 'bg-success-600', bad: 'bg-danger-600', info: 'bg-info-600' }
 </script>
 
 <template>
   <Teleport to="body">
-    <div class="fixed bottom-4 right-4 z-[60] flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2">
-      <TransitionGroup name="toast">
-        <div v-for="t in toasts" :key="t.id" :class="['flex items-start gap-2 rounded border border-line border-l-[3px] bg-surface px-3 py-2 text-[12.5px] text-ink shadow-md', tone[t.kind]]">
-          <span class="flex-1">{{ t.message }}</span>
-          <button class="text-faint hover:text-ink" @click="dismiss(t.id)"><X class="w-3.5 h-3.5" /></button>
+    <div class="pointer-events-none fixed inset-x-0 bottom-4 z-[100] flex flex-col items-center gap-2 px-4" aria-live="polite">
+      <TransitionGroup
+        enter-from-class="translate-y-2 opacity-0"
+        leave-to-class="translate-y-1 opacity-0"
+        enter-active-class="transition duration-[180ms] ease-[cubic-bezier(.2,.8,.2,1)]"
+        leave-active-class="transition duration-[120ms]"
+      >
+        <div
+          v-for="t in toasts"
+          :key="t.id"
+          class="card pointer-events-auto flex w-full max-w-md overflow-hidden shadow-md"
+          :role="t.kind === 'bad' ? 'alert' : 'status'"
+        >
+          <span class="w-1 shrink-0" :class="bar[t.kind]" />
+          <div class="flex min-w-0 flex-1 gap-3 px-4 py-3">
+            <p class="min-w-0 flex-1 text-[14px] leading-5 text-ink-800">{{ t.message }}</p>
+            <button class="-m-1 h-fit rounded-sm p-1 text-ink-400 hover:text-ink-900" aria-label="Dismiss" @click="dismiss(t.id)">
+              <X class="size-4" :stroke-width="1.75" />
+            </button>
+          </div>
         </div>
       </TransitionGroup>
     </div>
   </Teleport>
 </template>
-
-<style scoped>
-.toast-enter-active, .toast-leave-active { transition: all 0.2s ease-in-out; }
-.toast-enter-from, .toast-leave-to { opacity: 0; transform: translateX(12px); }
-</style>

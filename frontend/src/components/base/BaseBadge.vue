@@ -1,20 +1,30 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-const props = withDefaults(defineProps<{ tone?: 'neutral' | 'ok' | 'warn' | 'bad' | 'info' | 'dormant' | 'accent' }>(), { tone: 'neutral' })
-const classes = computed(() => {
-  const tones: Record<string, string> = {
-    neutral: 'border-line text-muted bg-surface',
-    ok: 'border-ok/40 text-ok bg-ok/12',
-    warn: 'border-warn/40 text-warn bg-warn/12',
-    bad: 'border-bad/40 text-bad bg-bad/12',
-    info: 'border-info/40 text-info bg-info/12',
-    accent: 'border-accent/40 text-accent-strong bg-accent-soft',
-    dormant: 'border-dormant text-ink bg-dormant/60',
-  }
-  return `inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide whitespace-nowrap ${tones[props.tone]}`
-})
+
+/// A pill. Text always carries the meaning; colour only reinforces it.
+const props = withDefaults(
+  defineProps<{ tone?: 'neutral' | 'ok' | 'warn' | 'bad' | 'info' | 'accent' | 'violet' | 'dormant' }>(),
+  { tone: 'neutral' },
+)
+
+const tones: Record<string, string> = {
+  neutral: 'bg-line-100 text-ink-600',
+  dormant: 'bg-line-100 text-ink-500',
+  ok: 'bg-success-50 text-success-600',
+  warn: 'bg-warning-50 text-warning-600',
+  bad: 'bg-danger-50 text-danger-600',
+  info: 'bg-info-50 text-info-600',
+  violet: 'bg-violet-50 text-violet-600',
+  accent: 'bg-primary-50 text-primary-700',
+}
+const cls = computed(() => tones[props.tone])
 </script>
 
 <template>
-  <span :class="classes"><slot /></span>
+  <span
+    class="inline-flex items-center gap-1 rounded-full px-2.5 py-[3px] text-[12px] font-semibold leading-4 whitespace-nowrap"
+    :class="cls"
+  >
+    <slot />
+  </span>
 </template>

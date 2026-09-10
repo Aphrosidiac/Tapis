@@ -1,20 +1,37 @@
 <script setup lang="ts">
-defineProps<{ modelValue?: string | null; label?: string; placeholder?: string; rows?: number; hint?: string; error?: string; required?: boolean; disabled?: boolean }>()
+import { useId } from 'vue'
+
+defineProps<{
+  modelValue?: string | null
+  label?: string
+  placeholder?: string
+  rows?: number
+  hint?: string
+  error?: string
+  required?: boolean
+  disabled?: boolean
+}>()
 defineEmits<{ 'update:modelValue': [value: string] }>()
+
+const id = useId()
 </script>
 
 <template>
-  <label class="block w-full">
-    <span v-if="label" class="block text-[11.5px] font-semibold text-muted mb-1">{{ label }}<span v-if="required" class="text-bad"> *</span></span>
+  <div>
+    <label v-if="label" :for="id" class="mb-1.5 block text-[14px] font-medium leading-5 text-ink-800">
+      {{ label }}<span v-if="required" class="ml-0.5 text-danger-600" aria-hidden="true">*</span>
+    </label>
     <textarea
+      :id="id"
+      class="field"
       :value="modelValue ?? ''"
       :placeholder="placeholder"
       :rows="rows || 3"
       :disabled="disabled"
-      :class="['w-full rounded px-2.5 py-1.5 text-[13px] border bg-field text-ink placeholder:text-faint focus:outline-none focus:border-ink disabled:bg-inert', error ? 'border-bad' : 'border-line']"
+      :aria-invalid="error ? 'true' : undefined"
       @input="$emit('update:modelValue', ($event.target as HTMLTextAreaElement).value)"
     />
-    <span v-if="error" class="mt-1 block text-[11.5px] text-bad">{{ error }}</span>
-    <span v-else-if="hint" class="mt-1 block text-[11.5px] text-faint">{{ hint }}</span>
-  </label>
+    <p v-if="error" class="mt-1.5 text-[13px] leading-[18px] text-danger-600">{{ error }}</p>
+    <p v-else-if="hint" class="mt-1.5 text-[13px] leading-[18px] text-ink-500">{{ hint }}</p>
+  </div>
 </template>

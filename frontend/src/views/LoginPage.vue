@@ -5,6 +5,7 @@ import { api, errorMessage } from '../lib/api'
 import { useAuthStore } from '../stores/auth'
 import BaseInput from '../components/base/BaseInput.vue'
 import BaseButton from '../components/base/BaseButton.vue'
+import Alert from '../components/base/Alert.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -45,28 +46,40 @@ async function submit() {
 </script>
 
 <template>
-  <div class="flex min-h-screen items-center justify-center bg-canvas p-6">
-    <div class="w-full max-w-sm animate-page-in">
+  <div class="flex min-h-screen items-center justify-center bg-surface-50 p-6">
+    <div class="w-full max-w-[400px] rise">
       <div class="mb-6 flex items-center gap-3">
-        <span class="inline-flex h-9 w-9 items-center justify-center rounded bg-ink">
-          <svg viewBox="0 0 32 32" class="h-5 w-5"><path d="M7 9h18M9 15h14M12 21h8" stroke="#2dd4bf" stroke-width="3.5" stroke-linecap="square" fill="none" /></svg>
+        <span class="grid size-10 place-items-center rounded-md bg-ink-900">
+          <svg viewBox="0 0 32 32" class="size-5" aria-hidden="true">
+            <path d="M7 9h18M9.5 15.5h13M13 22h6" stroke="#4fb6a9" stroke-width="3" stroke-linecap="round" fill="none" />
+          </svg>
         </span>
         <div>
-          <h1 class="text-[18px] font-bold tracking-tight">Tapis</h1>
-          <p class="text-[12px] text-muted">WhatsApp chatter, sifted into items.</p>
+          <h1 class="text-[22px] font-semibold leading-7 tracking-[-0.015em]">Tapis</h1>
+          <p class="text-[14px] leading-5 text-ink-500">WhatsApp chatter, sifted into items.</p>
         </div>
       </div>
-      <form class="space-y-3 rounded-md border border-line bg-surface p-5" @submit.prevent="submit">
-        <template v-if="needsSetup === null"><p class="text-[12.5px] text-muted">Checking…</p></template>
+
+      <form class="card space-y-4 p-6" @submit.prevent="submit">
+        <p v-if="needsSetup === null" class="text-[14px] text-ink-500">Checking…</p>
         <template v-else>
-          <div v-if="needsSetup" class="rounded border border-accent/30 bg-accent-soft px-3 py-2 text-[12px] text-accent-strong">
-            First run. Create the account that will manage this install.
-          </div>
+          <Alert v-if="needsSetup" tone="info" title="First run">
+            Create the account that will manage this install.
+          </Alert>
           <BaseInput v-if="needsSetup" v-model="name" label="Your name" required autocomplete="name" />
           <BaseInput v-model="email" label="Email" type="email" required autocomplete="username" />
-          <BaseInput v-model="password" label="Password" type="password" required :autocomplete="needsSetup ? 'new-password' : 'current-password'" :hint="needsSetup ? 'At least 8 characters' : ''" />
-          <p v-if="error" class="text-[12px] text-bad">{{ error }}</p>
-          <BaseButton type="submit" size="lg" class="w-full" :loading="busy">{{ needsSetup ? 'Create account' : 'Sign in' }}</BaseButton>
+          <BaseInput
+            v-model="password"
+            label="Password"
+            type="password"
+            required
+            :autocomplete="needsSetup ? 'new-password' : 'current-password'"
+            :hint="needsSetup ? 'At least 8 characters' : ''"
+          />
+          <p v-if="error" class="text-[14px] leading-5 text-danger-600">{{ error }}</p>
+          <BaseButton type="submit" variant="primary" size="lg" block :loading="busy">
+            {{ needsSetup ? 'Create account' : 'Sign in' }}
+          </BaseButton>
         </template>
       </form>
     </div>

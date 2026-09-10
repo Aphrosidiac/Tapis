@@ -32,9 +32,12 @@ export function usd(n: number): string {
 
 export const STATUS_LABEL: Record<string, string> = { NEW: 'New', IN_PROGRESS: 'In progress', DONE: 'Done', DISMISSED: 'Dismissed' }
 export const STATUS_TONE: Record<string, 'info' | 'warn' | 'ok' | 'dormant'> = { NEW: 'info', IN_PROGRESS: 'warn', DONE: 'ok', DISMISSED: 'dormant' }
+
+/// A message's fate is a different axis from an item's status, so it gets its
+/// own colour. Sharing them is how "New" and "Flagged" become the same pill.
 export const PRIORITY_TONE: Record<string, 'neutral' | 'warn' | 'bad'> = { LOW: 'neutral', NORMAL: 'neutral', HIGH: 'warn', URGENT: 'bad' }
 export const FILTER_LABEL: Record<string, string> = { PENDING: 'Waiting', DISMISSED: 'Dismissed', FLAGGED: 'Flagged', ATTACHED: 'In an item', SKIPPED: 'Ours' }
-export const FILTER_TONE: Record<string, 'neutral' | 'dormant' | 'warn' | 'ok' | 'info'> = { PENDING: 'neutral', DISMISSED: 'dormant', FLAGGED: 'warn', ATTACHED: 'ok', SKIPPED: 'info' }
+export const FILTER_TONE: Record<string, 'neutral' | 'dormant' | 'violet' | 'ok' | 'info'> = { PENDING: 'neutral', DISMISSED: 'dormant', FLAGGED: 'violet', ATTACHED: 'ok', SKIPPED: 'info' }
 
 export function senderOf(m: { senderName?: string | null; senderWaId: string; fromMe?: boolean }): string {
   if (m.fromMe) return 'Me'

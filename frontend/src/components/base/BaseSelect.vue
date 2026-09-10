@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useId } from 'vue'
+
 defineProps<{
   modelValue?: string | number | null
   label?: string
@@ -10,22 +12,27 @@ defineProps<{
   required?: boolean
 }>()
 defineEmits<{ 'update:modelValue': [value: string] }>()
+
+const id = useId()
 </script>
 
 <template>
-  <label class="block w-full">
-    <span v-if="label" class="block text-[11.5px] font-semibold text-muted mb-1">{{ label }}<span v-if="required" class="text-bad"> *</span></span>
+  <div>
+    <label v-if="label" :for="id" class="mb-1.5 block text-[14px] font-medium leading-5 text-ink-800">
+      {{ label }}<span v-if="required" class="ml-0.5 text-danger-600" aria-hidden="true">*</span>
+    </label>
     <select
+      :id="id"
+      class="field appearance-none pr-8"
       :value="modelValue ?? ''"
       :disabled="disabled"
-      :class="['w-full rounded px-2.5 py-1.5 pr-7 text-[13px] border bg-field text-ink appearance-none focus:outline-none focus:border-ink disabled:opacity-60 disabled:bg-inert', error ? 'border-bad' : 'border-line']"
-      style="background-image: url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2210%22 height=%226%22 viewBox=%220 0 10 6%22><path d=%22M1 1l4 4 4-4%22 stroke=%22%23555555%22 fill=%22none%22 stroke-width=%221.4%22/></svg>'); background-repeat: no-repeat; background-position: right 8px center;"
+      style="background-image: url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2210%22 height=%226%22 viewBox=%220 0 10 6%22><path d=%22M1 1l4 4 4-4%22 stroke=%22%235c7480%22 fill=%22none%22 stroke-width=%221.5%22 stroke-linecap=%22round%22/></svg>'); background-repeat: no-repeat; background-position: right 12px center"
       @change="$emit('update:modelValue', ($event.target as HTMLSelectElement).value)"
     >
       <option v-if="placeholder" value="">{{ placeholder }}</option>
       <option v-for="o in options" :key="o.value" :value="o.value">{{ o.label }}</option>
     </select>
-    <span v-if="error" class="mt-1 block text-[11.5px] text-bad">{{ error }}</span>
-    <span v-else-if="hint" class="mt-1 block text-[11.5px] text-faint">{{ hint }}</span>
-  </label>
+    <p v-if="error" class="mt-1.5 text-[13px] leading-[18px] text-danger-600">{{ error }}</p>
+    <p v-else-if="hint" class="mt-1.5 text-[13px] leading-[18px] text-ink-500">{{ hint }}</p>
+  </div>
 </template>

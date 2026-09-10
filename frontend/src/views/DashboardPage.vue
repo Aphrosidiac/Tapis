@@ -7,10 +7,10 @@ import { useToast } from '../composables/useToast'
 import { ago, usd, STATUS_LABEL, STATUS_TONE, PRIORITY_TONE } from '../lib/format'
 import StatCard from '../components/base/StatCard.vue'
 import BaseBadge from '../components/base/BaseBadge.vue'
-import BaseInput from '../components/base/BaseInput.vue'
 import BaseButton from '../components/base/BaseButton.vue'
 import EmptyState from '../components/base/EmptyState.vue'
-import { AlertTriangle, MessageSquareText, Send } from 'lucide-vue-next'
+import Alert from '../components/base/Alert.vue'
+import { MessageSquareText, Send, Search } from 'lucide-vue-next'
 
 interface Item {
   id: string
@@ -42,7 +42,6 @@ interface Dash {
 const { bad } = useToast()
 const dash = ref<Dash | null>(null)
 const items = ref<Item[]>([])
-const total = ref(0)
 const loading = ref(true)
 
 const TABS = [
@@ -66,7 +65,6 @@ async function load() {
     ])
     dash.value = d.data
     items.value = i.data.items
-    total.value = i.data.total
   } catch (e) {
     bad(errorMessage(e))
   } finally {
@@ -89,7 +87,8 @@ const groups = computed(() => {
   const map = new Map<string, { key: string; label: string; sub: string; items: Item[] }>()
   for (const it of items.value) {
     const keys: { key: string; label: string; sub: string }[] = []
-    if (groupBy.value === 'client') keys.push({ key: it.chat.clientName || `chat:${it.chat.id}`, label: it.chat.clientName || it.chat.name, sub: it.chat.clientName ? '' : 'No client name set' })
+    if (groupBy.value === 'client')
+      keys.push({ key: it.chat.clientName || `chat:${it.chat.id}`, label: it.chat.clientName || it.chat.name, sub: it.chat.clientName ? '' : 'No client name set' })
     else if (groupBy.value === 'chat') keys.push({ key: it.chat.id, label: it.chat.name, sub: it.chat.clientName || '' })
     else if (groupBy.value === 'rule') {
       if (!it.rules.length) keys.push({ key: 'none', label: 'No rule matched', sub: '' })
@@ -104,78 +103,131 @@ const groups = computed(() => {
 })
 
 const openCount = computed(() => (dash.value?.items.NEW ?? 0) + (dash.value?.items.IN_PROGRESS ?? 0))
+const noiseShare = computed(() =>
+  dash.value?.messages7 ? `${Math.round((dash.value.dismissed7 / Math.max(1, dash.value.messages7)) * 100)}% of the week's traffic` : 'nothing yet this week',
+)
 </script>
 
 <template>
-  <div class="animate-page-in">
+  <div class="rise">
     <!-- Things that need a person, before anything else. -->
-    <div v-if="dash && !dash.llmConfigured" class="mb-4 flex items-start gap-2 rounded-md border border-bad/40 bg-bad/8 px-4 py-3 text-[12.5px] text-ink">
-      <AlertTriangle class="mt-0.5 h-4 w-4 shrink-0 text-bad" />
-      <div>No model key is configured, so nothing is being analysed. Messages are still being stored. <RouterLink to="/settings" class="font-semibold underline">Add a key in Settings</RouterLink>.</div>
-    </div>
-    <div v-else-if="dash && dash.provider === 'mock'" class="mb-4 flex items-start gap-2 rounded-md border border-warn/40 bg-warn/8 px-4 py-3 text-[12.5px] text-ink">
-      <AlertTriangle class="mt-0.5 h-4 w-4 shrink-0 text-warn" />
-      <div>The <strong>mock</strong> provider is selected: no model is called and every brief says MOCK. <RouterLink to="/settings" class="font-semibold underline">Choose a real provider in Settings</RouterLink> before trusting anything here.</div>
-    </div>
-    <div v-if="dash && !dash.link.ready" class="mb-4 flex items-start gap-2 rounded-md border border-warn/40 bg-warn/8 px-4 py-3 text-[12.5px] text-ink">
-      <AlertTriangle class="mt-0.5 h-4 w-4 shrink-0 text-warn" />
-      <div>WhatsApp is <strong>{{ dash.link.state.replace('-', ' ') }}</strong>{{ dash.link.action ? ` — ${dash.link.action}` : '' }} <RouterLink to="/whatsapp" class="font-semibold underline">Open the link page</RouterLink>.</div>
-    </div>
-    <div v-if="dash?.recentFailed.length" class="mb-4 rounded-md border border-bad/40 bg-bad/8 px-4 py-3 text-[12.5px]">
-      <p class="font-semibold text-bad">{{ dash.failedBundles }} pipeline run{{ dash.failedBundles === 1 ? '' : 's' }} failed</p>
-      <p v-for="b in dash.recentFailed" :key="b.id" class="mt-1 text-muted"><span class="font-semibold text-ink">{{ b.chat }}:</span> {{ b.error }}</p>
-      <RouterLink to="/review" class="mt-1 inline-block font-semibold underline">Review and retry</RouterLink>
+    <div v-if="dash" class="mb-5 space-y-3">
+      <Alert v-if="!dash.llmConfigured" tone="danger" title="No model key is configured">
+        Nothing is being analysed. Messages are still being stored and will be processed once a key is added.
+        <RouterLink to="/settings" class="font-medium text-primary-700 underline">Add a key in Settings</RouterLink>.
+      </Alert>
+      <Alert v-else-if="dash.provider === 'mock'" tone="warning" title="The mock provider is selected">
+        No model is called and every brief says MOCK.
+        <RouterLink to="/settings" class="font-medium text-primary-700 underline">Choose a real provider</RouterLink>
+        before trusting anything here.
+      </Alert>
+      <Alert v-if="!dash.link.ready" tone="warning" :title="`WhatsApp is ${dash.link.state.replace('-', ' ')}`">
+        {{ dash.link.action || 'Messages are not arriving.' }}
+        <RouterLink to="/whatsapp" class="font-medium text-primary-700 underline">Open the link page</RouterLink>.
+      </Alert>
+      <Alert v-if="dash.recentFailed.length" tone="danger" :title="`${dash.failedBundles} pipeline run${dash.failedBundles === 1 ? '' : 's'} failed`">
+        <p v-for="b in dash.recentFailed" :key="b.id" class="truncate">
+          <span class="font-medium text-ink-800">{{ b.chat }}:</span> {{ b.error }}
+        </p>
+        <RouterLink to="/review" class="font-medium text-primary-700 underline">Review and retry</RouterLink>
+      </Alert>
     </div>
 
-    <div class="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+    <div class="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
       <StatCard label="Open items" :value="openCount" :hint="`${dash?.items.NEW ?? 0} new · ${dash?.items.IN_PROGRESS ?? 0} in progress`" tone="accent" />
       <StatCard label="Done" :value="dash?.items.DONE ?? 0" :hint="`${dash?.items.DISMISSED ?? 0} dismissed`" />
       <StatCard label="Tracked chats" :value="dash?.trackedChats ?? 0" :hint="`${dash?.messages7 ?? 0} messages this week`" />
-      <StatCard label="Waiting to be read" :value="dash?.pendingMessages ?? 0" hint="messages not yet bundled" :tone="(dash?.pendingMessages ?? 0) > 50 ? 'warn' : 'neutral'" />
-      <StatCard label="Dismissed this week" :value="dash?.dismissed7 ?? 0" :hint="dash?.messages7 ? `${Math.round((dash.dismissed7 / Math.max(1, dash.messages7)) * 100)}% of traffic was noise` : ''" />
+      <StatCard
+        label="Waiting to be read"
+        :value="dash?.pendingMessages ?? 0"
+        hint="stored, not yet bundled"
+        :tone="(dash?.pendingMessages ?? 0) > 50 ? 'warn' : 'neutral'"
+      />
+      <StatCard label="Dismissed as noise" :value="dash?.dismissed7 ?? 0" :hint="noiseShare" />
       <StatCard label="Model cost, 7 days" :value="usd(dash?.cost.d7 ?? 0)" :hint="`${dash?.cost.calls7 ?? 0} calls · ${usd(dash?.cost.d30 ?? 0)} over 30 days`" />
     </div>
 
-    <div class="mb-3 flex flex-wrap items-center gap-2">
-      <div class="flex overflow-x-auto">
-        <button v-for="t in TABS" :key="t.key" :class="['tab px-3 py-1.5 text-[12.5px]', tab === t.key && 'tab-on']" @click="tab = t.key">
-          {{ t.label }}<span v-if="dash && t.key !== 'open' && t.key !== 'all'" class="ml-1 text-faint tabular">{{ dash.items[t.key] ?? 0 }}</span><span v-else-if="dash && t.key === 'open'" class="ml-1 text-faint tabular">{{ openCount }}</span>
+    <div class="mb-4 flex flex-wrap items-center gap-3">
+      <div class="flex gap-1 overflow-x-auto rounded-md border border-line-200 bg-surface-0 p-1">
+        <button
+          v-for="t in TABS"
+          :key="t.key"
+          class="rounded-sm px-3 py-1.5 text-[14px] leading-5 whitespace-nowrap"
+          :class="tab === t.key ? 'bg-ink-900 font-medium text-white' : 'text-ink-500 hover:bg-surface-50 hover:text-ink-900'"
+          @click="tab = t.key"
+        >
+          {{ t.label }}
+          <span class="num ml-1 opacity-70">{{ t.key === 'open' ? openCount : t.key === 'all' ? '' : (dash?.items[t.key] ?? 0) }}</span>
         </button>
       </div>
-      <div class="ml-auto flex items-center gap-2">
-        <span class="text-[11.5px] text-muted">Group by</span>
-        <div class="flex rounded border border-line bg-surface p-0.5">
-          <button v-for="g in ['client', 'chat', 'rule', 'none']" :key="g" :class="['rounded px-2 py-1 text-[11.5px] capitalize', groupBy === g ? 'bg-ink text-white' : 'text-muted hover:text-ink']" @click="groupBy = g as never">{{ g }}</button>
+      <div class="ml-auto flex items-center gap-3">
+        <div class="flex items-center gap-2">
+          <span class="text-[13px] leading-[18px] text-ink-500">Group by</span>
+          <div class="flex gap-1 rounded-md border border-line-200 bg-surface-0 p-1">
+            <button
+              v-for="g in ['client', 'chat', 'rule', 'none']"
+              :key="g"
+              class="rounded-sm px-2.5 py-1 text-[13px] capitalize"
+              :class="groupBy === g ? 'bg-ink-900 font-medium text-white' : 'text-ink-500 hover:bg-surface-50 hover:text-ink-900'"
+              @click="groupBy = g as never"
+            >
+              {{ g }}
+            </button>
+          </div>
         </div>
-        <div class="w-44"><BaseInput v-model="q" placeholder="Search items…" /></div>
+        <div class="relative w-56">
+          <Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-400" :stroke-width="1.5" />
+          <input v-model="q" class="field pl-9" placeholder="Search items…" aria-label="Search items" />
+        </div>
       </div>
     </div>
 
-    <EmptyState v-if="!loading && !items.length" title="Nothing here yet" :hint="tab === 'open' ? 'Items appear once a tracked chat says something that matches one of its rules. Start by choosing chats to read and writing a rule.' : 'No items with this status.'">
-      <RouterLink to="/chats"><BaseButton>Choose chats & rules</BaseButton></RouterLink>
+    <EmptyState
+      v-if="!loading && !items.length"
+      title="Nothing here yet"
+      :hint="
+        tab === 'open'
+          ? 'Items appear once a tracked chat says something that matches one of its rules. Start by choosing chats to read and writing a rule.'
+          : 'No items with this status.'
+      "
+    >
+      <RouterLink to="/chats"><BaseButton variant="primary">Choose chats &amp; rules</BaseButton></RouterLink>
     </EmptyState>
 
-    <div v-for="g in groups" :key="g.key" class="mb-5">
-      <div class="mb-1.5 flex items-baseline gap-2 px-1">
-        <h3 class="text-[13px] font-bold text-ink">{{ g.label }}</h3>
-        <span v-if="g.sub" class="text-[11.5px] text-faint">{{ g.sub }}</span>
-        <span class="ml-auto text-[11.5px] text-faint tabular">{{ g.items.length }}</span>
+    <div v-for="g in groups" :key="g.key" class="mb-6">
+      <div class="mb-2 flex items-baseline gap-2 px-0.5">
+        <h3 class="text-[15px] font-semibold leading-[22px]">{{ g.label }}</h3>
+        <span v-if="g.sub" class="text-[13px] leading-[18px] text-ink-500">{{ g.sub }}</span>
+        <span class="num ml-auto text-[13px] leading-[18px] text-ink-500">{{ g.items.length }}</span>
       </div>
-      <div class="overflow-hidden rounded-md border border-line bg-surface">
-        <RouterLink v-for="it in g.items" :key="it.id" :to="`/items/${it.id}`" class="flex items-start gap-3 border-b border-hair px-4 py-3 last:border-b-0 hover:bg-tint">
-          <span :class="['mt-1.5 h-2 w-2 shrink-0 rounded-full', it.priority === 'URGENT' ? 'bg-bad' : it.priority === 'HIGH' ? 'bg-warn' : it.status === 'DONE' ? 'bg-ok' : it.status === 'DISMISSED' ? 'bg-dormant' : 'bg-accent']" />
+      <div class="card divide-y divide-line-100 overflow-hidden">
+        <RouterLink v-for="it in g.items" :key="it.id" :to="`/items/${it.id}`" class="flex items-start gap-3 px-5 py-4 hover:bg-surface-50">
+          <span
+            class="mt-1.5 size-2 shrink-0 rounded-full"
+            :class="
+              it.priority === 'URGENT'
+                ? 'bg-danger-600'
+                : it.priority === 'HIGH'
+                  ? 'bg-warning-600'
+                  : it.status === 'DONE'
+                    ? 'bg-success-600'
+                    : it.status === 'DISMISSED'
+                      ? 'bg-ink-300'
+                      : 'bg-primary-600'
+            "
+          />
           <div class="min-w-0 flex-1">
             <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <p class="text-[13px] font-semibold text-ink">{{ it.title }}</p>
+              <p class="text-[15px] font-semibold leading-[22px] text-ink-900">{{ it.title }}</p>
               <BaseBadge :tone="STATUS_TONE[it.status]">{{ STATUS_LABEL[it.status] }}</BaseBadge>
               <BaseBadge v-if="it.priority === 'HIGH' || it.priority === 'URGENT'" :tone="PRIORITY_TONE[it.priority]">{{ it.priority }}</BaseBadge>
             </div>
-            <p class="mt-0.5 line-clamp-2 text-[12.5px] text-muted">{{ it.brief }}</p>
-            <div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-faint">
+            <p class="mt-1 line-clamp-2 text-[14px] leading-5 text-ink-600">{{ it.brief }}</p>
+            <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] leading-[18px] text-ink-500">
               <span v-if="groupBy !== 'chat'">{{ it.chat.name }}</span>
-              <span v-for="r in it.rules" :key="r.id" class="rounded-sm bg-inert px-1.5 py-0.5 text-muted">{{ r.text }}</span>
-              <span class="inline-flex items-center gap-1"><MessageSquareText class="h-3 w-3" /> {{ it.counts.messages }}</span>
-              <span v-if="it.counts.deliveries" class="inline-flex items-center gap-1"><Send class="h-3 w-3" /> {{ it.counts.deliveries }}</span>
+              <span v-for="r in it.rules" :key="r.id" class="rounded-full bg-line-100 px-2 py-0.5 text-ink-600">{{ r.text }}</span>
+              <span class="inline-flex items-center gap-1"><MessageSquareText class="size-3.5" :stroke-width="1.5" /> {{ it.counts.messages }}</span>
+              <span v-if="it.counts.deliveries" class="inline-flex items-center gap-1"><Send class="size-3.5" :stroke-width="1.5" /> {{ it.counts.deliveries }}</span>
               <span class="ml-auto">{{ ago(it.lastActivityAt) }}</span>
             </div>
           </div>

@@ -1,12 +1,29 @@
 <script setup lang="ts">
-defineProps<{ label: string; value: string | number; hint?: string; tone?: 'neutral' | 'ok' | 'warn' | 'bad' | 'accent' }>()
-const color: Record<string, string> = { neutral: 'text-ink', ok: 'text-ok', warn: 'text-warn', bad: 'text-bad', accent: 'text-accent-strong' }
+withDefaults(
+  defineProps<{
+    label: string
+    value: string | number
+    hint?: string
+    tone?: 'neutral' | 'ok' | 'warn' | 'bad' | 'accent'
+  }>(),
+  { tone: 'neutral' },
+)
+const color: Record<string, string> = {
+  neutral: 'text-ink-900',
+  ok: 'text-success-600',
+  warn: 'text-warning-600',
+  bad: 'text-danger-600',
+  accent: 'text-primary-700',
+}
 </script>
 
 <template>
-  <div class="rounded-md border border-line bg-surface px-4 py-3">
-    <p class="eyebrow">{{ label }}</p>
-    <p :class="['mt-1 text-[22px] font-bold leading-none tabular', color[tone || 'neutral']]">{{ value }}</p>
-    <p v-if="hint" class="mt-1.5 text-[11.5px] text-faint">{{ hint }}</p>
+  <div class="card p-5">
+    <!-- `.eyebrow` is nowrap because a wrapped TABLE header misaligns its
+         column. A stat label has no column to misalign and a long one is
+         clipped at the card edge on a phone, so it wraps here. -->
+    <p class="eyebrow whitespace-normal">{{ label }}</p>
+    <p class="num mt-2 text-[26px] font-semibold leading-8 tracking-[-0.01em]" :class="color[tone]">{{ value }}</p>
+    <p v-if="hint" class="mt-1.5 text-[13px] leading-[18px] text-ink-500">{{ hint }}</p>
   </div>
 </template>

@@ -1,39 +1,43 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { Loader2 } from 'lucide-vue-next'
-
-const props = withDefaults(
+withDefaults(
   defineProps<{
-    variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'accent'
+    variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'danger-ghost'
     size?: 'sm' | 'md' | 'lg'
     loading?: boolean
     disabled?: boolean
+    block?: boolean
     type?: 'button' | 'submit' | 'reset'
   }>(),
-  { variant: 'primary', size: 'md', loading: false, disabled: false, type: 'button' },
+  { variant: 'secondary', size: 'md', type: 'button' },
 )
-
-const classes = computed(() => {
-  const base = 'inline-flex items-center justify-center rounded font-semibold border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ink/25 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap'
-  const variants: Record<string, string> = {
-    primary: 'bg-ink text-white border-ink hover:bg-black',
-    accent: 'bg-accent text-white border-accent hover:bg-accent-strong',
-    secondary: 'bg-control text-ink border-line hover:bg-control-hover',
-    danger: 'bg-bad text-white border-bad hover:opacity-90',
-    ghost: 'bg-transparent text-muted border-transparent hover:bg-hair hover:text-ink',
-  }
-  const sizes: Record<string, string> = {
-    sm: 'text-[11.5px] px-2 py-1 gap-1',
-    md: 'text-[12.5px] px-3 py-1.5 gap-1.5',
-    lg: 'text-[13px] px-5 py-2 gap-2',
-  }
-  return `${base} ${variants[props.variant]} ${sizes[props.size]}`
-})
 </script>
 
 <template>
-  <button :class="classes" :disabled="disabled || loading" :type="type">
-    <Loader2 v-if="loading" class="w-3.5 h-3.5 animate-spin" />
+  <!-- The primary action is ink, not the accent: white on primary-600 is
+       4.2:1 and fails AA for a 15px label. -->
+  <button
+    :type="type"
+    :disabled="disabled || loading"
+    :aria-busy="loading || undefined"
+    class="inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-sm font-medium disabled:cursor-not-allowed disabled:opacity-40"
+    :class="[
+      block && 'w-full',
+      size === 'sm'
+        ? 'h-[38px] px-3 text-[14px] sm:h-[30px] sm:px-2.5'
+        : size === 'lg'
+          ? 'h-11 px-[18px] text-[16px]'
+          : 'h-[42px] px-4 text-[15px] sm:h-[38px] sm:px-3.5',
+      variant === 'primary' && 'bg-ink-900 text-white hover:bg-ink-800 active:bg-black',
+      variant === 'secondary' && 'border border-line-200 bg-surface-0 text-ink-800 hover:bg-surface-50 active:bg-line-100',
+      variant === 'ghost' && 'text-ink-600 hover:bg-surface-50 hover:text-ink-900',
+      variant === 'danger' && 'bg-danger-600 text-white hover:bg-danger-700',
+      variant === 'danger-ghost' && 'border border-line-200 text-danger-600 hover:bg-danger-50',
+    ]"
+  >
+    <svg v-if="loading" class="size-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2.5" opacity=".25" />
+      <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
+    </svg>
     <slot />
   </button>
 </template>

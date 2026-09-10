@@ -7,16 +7,20 @@ import { Menu, LogOut } from 'lucide-vue-next'
 
 defineProps<{ title: string }>()
 defineEmits<{ toggleSidebar: [] }>()
+
 const auth = useAuthStore()
 const router = useRouter()
 const linkStore = useLinkStore()
 
+/// One pill, three states. A dot plus a word, because colour alone is not a
+/// status anyone can read.
 const pill = computed(() => {
   const l = linkStore.link
-  if (!l) return { label: 'WhatsApp …', cls: 'text-faint border-line' }
-  if (l.ready) return { label: `WhatsApp · ${l.me?.name || l.me?.id || 'linked'}`, cls: 'text-ok border-ok/40 bg-ok/10' }
-  if (l.state === 'pairing' || l.state === 'starting' || l.state === 'reconnecting') return { label: `WhatsApp · ${l.state}`, cls: 'text-warn border-warn/40 bg-warn/10' }
-  return { label: 'WhatsApp · not linked', cls: 'text-bad border-bad/40 bg-bad/10' }
+  if (!l) return { label: 'WhatsApp', dot: 'bg-ink-300', cls: 'text-ink-500 bg-line-100' }
+  if (l.ready) return { label: l.me?.name || `+${l.me?.id}` || 'Linked', dot: 'bg-success-600', cls: 'text-success-600 bg-success-50' }
+  if (['pairing', 'starting', 'reconnecting'].includes(l.state))
+    return { label: l.state, dot: 'bg-warning-600', cls: 'text-warning-600 bg-warning-50' }
+  return { label: 'Not linked', dot: 'bg-danger-600', cls: 'text-danger-600 bg-danger-50' }
 })
 
 function logout() {
@@ -26,10 +30,21 @@ function logout() {
 </script>
 
 <template>
-  <header class="sticky top-0 z-30 flex h-12 items-center gap-3 border-b border-line bg-surface/95 px-4 backdrop-blur sm:px-6">
-    <button class="-ml-2 inline-flex h-10 w-10 items-center justify-center text-muted hover:text-ink lg:hidden" aria-label="Open navigation" @click="$emit('toggleSidebar')"><Menu class="h-5 w-5" /></button>
-    <h2 class="flex-1 text-[13px] font-bold text-ink">{{ title }}</h2>
-    <RouterLink to="/whatsapp" :class="['hidden rounded-full border px-2.5 py-0.5 text-[11px] font-semibold sm:inline-flex', pill.cls]">{{ pill.label }}</RouterLink>
-    <button class="inline-flex items-center gap-1.5 px-2 py-1 text-[11.5px] text-muted hover:text-ink" @click="logout"><LogOut class="h-3.5 w-3.5" /> Sign out</button>
+  <header class="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-line-200 bg-surface-50/90 px-4 backdrop-blur-md lg:px-8">
+    <button class="-ml-1 rounded-sm p-1.5 text-ink-500 hover:text-ink-900 lg:hidden" aria-label="Open menu" @click="$emit('toggleSidebar')">
+      <Menu class="size-5" :stroke-width="1.5" />
+    </button>
+    <h2 class="min-w-0 flex-1 truncate text-[15px] font-medium leading-[22px] text-ink-900">{{ title }}</h2>
+    <RouterLink
+      to="/whatsapp"
+      class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[13px] font-medium leading-4"
+      :class="pill.cls"
+    >
+      <span class="size-1.5 rounded-full" :class="pill.dot" aria-hidden="true" />
+      <span class="max-w-[14ch] truncate">{{ pill.label }}</span>
+    </RouterLink>
+    <button class="inline-flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-[14px] text-ink-500 hover:text-ink-900" @click="logout">
+      <LogOut class="size-4" :stroke-width="1.5" /> <span class="hidden sm:inline">Sign out</span>
+    </button>
   </header>
 </template>

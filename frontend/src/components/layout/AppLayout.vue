@@ -8,21 +8,26 @@ import { usePolling } from '../../composables/usePolling'
 
 const route = useRoute()
 const title = computed(() => (route.meta.title as string) || '')
-const sidebarOpen = ref(false)
-watch(() => route.path, () => { sidebarOpen.value = false })
+const navOpen = ref(false)
+// Navigating on a phone must close the drawer, or the new page is hidden
+// behind it.
+watch(() => route.fullPath, () => { navOpen.value = false })
 
 const link = useLinkStore()
 usePolling(() => link.refresh(), 20_000)
 </script>
 
 <template>
-  <div class="min-h-screen bg-canvas">
-    <div v-if="sidebarOpen" class="fixed inset-0 z-40 bg-ink/40 lg:hidden" @click="sidebarOpen = false" />
-    <Sidebar :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'" @close="sidebarOpen = false" />
-    <div class="lg:ml-56">
-      <Navbar :title="title" @toggle-sidebar="sidebarOpen = !sidebarOpen" />
-      <main class="mx-auto max-w-[1400px] p-4 sm:p-6">
-        <RouterView />
+  <div class="flex min-h-screen">
+    <Sidebar :open="navOpen" @close="navOpen = false" />
+    <div v-if="navOpen" class="fixed inset-0 z-30 bg-ink-900/40 lg:hidden" @click="navOpen = false" />
+
+    <div class="flex min-w-0 flex-1 flex-col">
+      <Navbar :title="title" @toggle-sidebar="navOpen = !navOpen" />
+      <main class="min-w-0 flex-1 px-4 py-6 lg:px-8">
+        <div class="mx-auto max-w-[1280px]">
+          <RouterView />
+        </div>
       </main>
     </div>
   </div>

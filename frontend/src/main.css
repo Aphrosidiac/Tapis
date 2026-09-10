@@ -1,84 +1,212 @@
 @import "tailwindcss";
 
-/*
-  Tapis — paper and ink, one teal accent.
-  Dense enough to be worked in all day; every text colour clears 4.5:1 on
-  every ground it sits on.
-*/
+/* ─────────────────────────────────────────────────────────────────────────
+   Tapis design tokens.
+
+   The SmoothSail / RackForge system, unchanged in structure: an ink ramp on a
+   near-white ground, hairline borders carrying a soft shadow, 6/10/14 radii,
+   15px body on Hanken Grotesk. Tapis keeps its own teal accent.
+
+   Primary ACTION is ink, never the accent. White on --primary-600 measures
+   4.2:1, which fails AA for a 15px label; ink measures 16:1. The accent stays
+   where it is a signal rather than a surface — the mark, active nav, links
+   (at --primary-700, 6.1:1), badges and the focus ring.
+   ───────────────────────────────────────────────────────────────────────── */
 @theme {
-  --font-sans: 'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  /* Manrope: open geometric, deliberately not the Hanken Grotesk that
+     SmoothSail and RackForge run on. Chosen by rendering the real screens
+     under six candidates rather than from specimens — Schibsted Grotesk and
+     Onest were disqualified on the spot because their tabular figures space
+     punctuation too, so "RM 12,480.50" comes apart into "RM 12 , 480 . 50".
+     The CJK faces are load-bearing, not politeness: clients write in Chinese
+     and no Latin variable font covers a single one of those glyphs. */
+  --font-sans: "Manrope Variable", Manrope, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, Helvetica, Arial, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Noto Sans SC", sans-serif;
 
-  --color-canvas: #f5f4ef;   /* the page */
-  --color-surface: #ffffff;  /* cards, sidebar, tables */
-  --color-tint: #faf9f4;     /* hovered rows, selected */
-  --color-inert: #edebe3;    /* disabled, footers, closed states */
-  --color-field: #ffffff;
-  --color-control: #e8e6de;
-  --color-control-hover: #dfdcd2;
+  /* ink ramp — cool graphite */
+  --color-ink-900: #0f1b21;   /* headings */
+  --color-ink-800: #1b2a32;   /* body */
+  --color-ink-600: #40575f;   /* secondary */
+  --color-ink-500: #5c7480;   /* muted text, nav links — 4.9:1, the floor for text */
+  --color-ink-400: #93a7b1;   /* ICONS AND DISABLED ONLY — 2.5:1, never text */
+  --color-ink-300: #c3d0d6;   /* placeholders, faint rules */
 
-  --color-ink: #171717;
-  --color-muted: #555555;
-  --color-faint: #6b6b6b;
-  --color-line: rgb(23 23 23 / 0.13);
-  --color-hair: rgb(23 23 23 / 0.07);
+  --color-line-200: #e1e9ec;  /* borders, dividers */
+  --color-line-100: #edf2f4;  /* card borders, table rows */
 
-  --color-accent: #0f766e;
-  --color-accent-strong: #0b5f59;
-  --color-accent-soft: #e3f1ef;
+  --color-surface-50: #f7f9fa; /* app background */
+  --color-surface-0:  #ffffff; /* cards, inputs */
 
-  --color-ok: #1b6b44;
-  --color-warn: #7e5700;
-  --color-bad: #b3261e;
-  --color-info: #2a5d8f;
-  --color-dormant: #bdbcb6;
+  /* primary — teal, the mark's colour */
+  --color-primary-800: #08514a;
+  --color-primary-700: #0b6e63;  /* links, active nav text */
+  --color-primary-600: #0f8b7e;  /* mark, toggles, focus ring */
+  --color-primary-400: #4fb6a9;
+  --color-primary-100: #d7efeb;
+  --color-primary-50:  #eff8f6;
 
-  --animate-page-in: pageIn 0.25s ease-out;
-  --animate-fade-in: fadeIn 0.2s ease-out;
-  @keyframes pageIn {
-    from { opacity: 0; transform: translateY(6px); }
-    to { opacity: 1; transform: translateY(0); }
+  /* semantic */
+  --color-success-600: #1e8f63;  --color-success-50: #e2f4ec;
+  --color-warning-600: #b87400;  --color-warning-50: #fcf0dc;
+  --color-info-600:    #2a6f97;  --color-info-50:    #e4eff6;
+  --color-danger-600:  #c43d51;  --color-danger-700: #a52f42;
+  --color-danger-50:   #fbe6e9;
+  /* An item's own progress (new → in progress → done) is a different KIND of
+     signal from a message's fate (dismissed, flagged, attached). Sharing the
+     semantic five between the two axes is how "New" and "Flagged" end up as
+     the same amber pill. This is the second axis's colour. */
+  --color-violet-600: #6552c8;   --color-violet-50: #efeafc;
+
+  --radius-sm: 6px;   /* buttons, inputs, pills-on-square */
+  --radius-md: 10px;  /* cards, modals, popovers */
+  --radius-lg: 14px;  /* feature panels */
+
+  --shadow-xs: 0 1px 2px rgb(15 27 33 / 0.04);
+  --shadow-sm: 0 1px 3px rgb(15 27 33 / 0.06), 0 1px 2px rgb(15 27 33 / 0.04);
+  --shadow-md: 0 8px 24px rgb(15 27 33 / 0.08);
+  --shadow-lg: 0 24px 48px rgb(15 27 33 / 0.14);
+
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+}
+
+@layer base {
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0;
+    background: var(--color-surface-50);
+    color: var(--color-ink-800);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.4667;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
-  @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+  html, body, #app { min-height: 100%; }
+
+  h1, h2, h3, h4 {
+    color: var(--color-ink-900);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+
+  /* Never remove the focus ring. */
+  :focus-visible {
+    outline: 2px solid var(--color-primary-600);
+    outline-offset: 1px;
+    border-radius: 4px;
+  }
+  ::selection { background: var(--color-primary-100); }
+  [type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; }
+
+  ::-webkit-scrollbar { width: 12px; height: 12px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-line-200);
+    border-radius: 99px;
+    border: 3px solid var(--color-surface-50);
+  }
+  ::-webkit-scrollbar-thumb:hover { background: var(--color-ink-300); }
+
+  /* Hover feedback by default, so a new element never lands with a colour
+     change and nothing to carry it. Any Tailwind transition-* utility still
+     overrides this. */
+  :is(a, button, summary, label, [role="button"], [role="switch"], input, select, textarea) {
+    transition-property: color, background-color, border-color, box-shadow, opacity;
+    transition-duration: 120ms;
+    transition-timing-function: var(--ease-out);
   }
 }
 
-body {
-  font-family: var(--font-sans);
-  font-weight: 450;
-  -webkit-font-smoothing: antialiased;
-  color: var(--color-ink);
-  background: var(--color-canvas);
-  font-size: 13px;
+@layer components {
+  /* Cards use a border AND a shadow: the border does the work, the shadow
+     only lifts the card off the surface-50 ground. */
+  .card {
+    background: var(--color-surface-0);
+    border: 1px solid var(--color-line-100);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* 12/16 600 uppercase 0.08em — table headers, eyebrows, stat labels */
+  .eyebrow {
+    font-size: 12px;
+    line-height: 16px;
+    white-space: nowrap;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-ink-500);
+  }
+
+  /* One input skin, so a plain <input> in any view looks right. */
+  .field {
+    width: 100%;
+    height: 38px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-line-200);
+    background: var(--color-surface-0);
+    padding: 0 12px;
+    font: inherit;
+    font-size: 15px;
+    color: var(--color-ink-800);
+    transition: border-color 120ms var(--ease-out), box-shadow 120ms var(--ease-out);
+  }
+  textarea.field { height: auto; padding: 9px 12px; line-height: 1.5; resize: vertical; }
+  .field::placeholder { color: var(--color-ink-300); }
+  .field:focus {
+    outline: none;
+    border-color: var(--color-primary-600);
+    box-shadow: 0 0 0 3px rgb(15 139 126 / 0.16);
+  }
+  .field:disabled {
+    background: var(--color-surface-50);
+    color: var(--color-ink-400);
+    cursor: not-allowed;
+  }
+  .field[aria-invalid="true"] { border-color: var(--color-danger-600); }
+
+  /* A message quoted exactly as the client sent it. Long unbroken strings —
+     URLs, order numbers, a wall of Chinese — must wrap rather than widen the
+     column they sit in. */
+  .original { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+  .skeleton {
+    background: linear-gradient(90deg,
+      var(--color-line-100) 25%, var(--color-surface-50) 37%, var(--color-line-100) 63%);
+    background-size: 400% 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+    border-radius: var(--radius-md);
+  }
 }
 
-a, button, input, select, textarea, summary, [role='button'], tbody tr {
-  transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, color 0.15s ease-in-out, opacity 0.15s ease-in-out;
-}
+@keyframes shimmer { from { background-position: 100% 0 } to { background-position: 0 0 } }
+@keyframes rise { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }
 
-.eyebrow {
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 10.5px;
-  font-weight: 650;
-  color: var(--color-muted);
-}
-.tabular { font-variant-numeric: tabular-nums; }
-
-.tab { border-bottom: 2px solid transparent; color: var(--color-muted); }
-.tab:hover { color: var(--color-ink); }
-.tab-on { border-color: var(--color-ink); color: var(--color-ink); font-weight: 650; }
-
-/* Originals are shown exactly; long words from clients must wrap, not overflow. */
-.original { white-space: pre-wrap; overflow-wrap: anywhere; }
-
-.skeleton { position: relative; overflow: hidden; background: var(--color-hair); border-radius: 4px; }
+/* The page body on every navigation. Deliberately shy — it fires on every
+   click in the product, so anything with personality becomes a tax. */
+.rise { animation: rise 240ms var(--ease-out) both; }
 
 @media (pointer: coarse) {
-  button, [role='button'], select, summary, input:not([type='checkbox']):not([type='radio']) { min-height: 40px; }
+  /* A finger, not a small screen: a touchscreen laptop needs this and a
+     narrow desktop window does not. 16px on fields is the only reliable way
+     to stop iOS Safari zooming the page on focus and leaving it zoomed. */
+  button, [role="button"], select, summary,
+  input:not([type="checkbox"]):not([type="radio"]) { min-height: 42px; }
   input, select, textarea { font-size: 16px; }
 }
+
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .skeleton { animation: none; background: var(--color-line-100); }
 }

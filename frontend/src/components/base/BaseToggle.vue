@@ -1,11 +1,19 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-const props = withDefaults(defineProps<{ modelValue: boolean; disabled?: boolean; label?: string; size?: 'md' | 'lg' }>(), { disabled: false, size: 'md' })
+
+const props = withDefaults(
+  defineProps<{ modelValue: boolean; disabled?: boolean; label?: string; size?: 'md' | 'lg' }>(),
+  { disabled: false, size: 'md' },
+)
 const emit = defineEmits<{ 'update:modelValue': [boolean] }>()
+
+/// Explicit pixels: the knob travels the track's inner width minus its own,
+/// and that arithmetic does not land on the spacing scale. A near miss shows
+/// as the knob stopping short of the edge, which reads as a rendering bug.
 const dims = computed(() =>
   props.size === 'lg'
-    ? { track: 'h-[28px] w-[52px]', knob: 'h-[22px] w-[22px]', on: 'translate-x-[24px]' }
-    : { track: 'h-[22px] w-[40px]', knob: 'h-[16px] w-[16px]', on: 'translate-x-[18px]' },
+    ? { track: 'h-6 w-11', knob: 'size-5', on: 'translate-x-5' }
+    : { track: 'h-5 w-9', knob: 'size-4', on: 'translate-x-4' },
 )
 </script>
 
@@ -16,9 +24,13 @@ const dims = computed(() =>
     :aria-checked="modelValue"
     :aria-label="label"
     :disabled="disabled"
-    :class="['relative inline-flex shrink-0 items-center rounded-full border p-0.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ink/25 disabled:cursor-not-allowed disabled:opacity-40', dims.track, modelValue ? 'border-accent bg-accent' : 'border-line bg-control']"
+    class="relative inline-flex shrink-0 items-center rounded-full p-0.5 disabled:cursor-not-allowed disabled:opacity-40"
+    :class="[dims.track, modelValue ? 'bg-primary-600' : 'bg-ink-300']"
     @click.stop="emit('update:modelValue', !modelValue)"
   >
-    <span :class="['block rounded-full bg-white transition-transform duration-150', dims.knob, modelValue ? dims.on : 'translate-x-0 border border-line']" />
+    <span
+      class="block rounded-full bg-white shadow-xs transition-transform duration-[120ms]"
+      :class="[dims.knob, modelValue ? dims.on : 'translate-x-0']"
+    />
   </button>
 </template>
