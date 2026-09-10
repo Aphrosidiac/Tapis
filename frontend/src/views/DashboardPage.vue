@@ -133,7 +133,7 @@ const noiseShare = computed(() =>
       </Alert>
     </div>
 
-    <div class="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
+    <div class="mb-5 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-6">
       <StatCard label="Open items" :value="openCount" :hint="`${dash?.items.NEW ?? 0} new · ${dash?.items.IN_PROGRESS ?? 0} in progress`" tone="accent" />
       <StatCard label="Done" :value="dash?.items.DONE ?? 0" :hint="`${dash?.items.DISMISSED ?? 0} dismissed`" />
       <StatCard label="Tracked chats" :value="dash?.trackedChats ?? 0" :hint="`${dash?.messages7 ?? 0} messages this week`" />
@@ -147,12 +147,12 @@ const noiseShare = computed(() =>
       <StatCard label="Model cost, 7 days" :value="usd(dash?.cost.d7 ?? 0)" :hint="`${dash?.cost.calls7 ?? 0} calls · ${usd(dash?.cost.d30 ?? 0)} over 30 days`" />
     </div>
 
-    <div class="mb-4 flex flex-wrap items-center gap-3">
-      <div class="flex gap-1 overflow-x-auto rounded-md border border-line-200 bg-surface-0 p-1">
+    <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
+      <div class="no-bar flex gap-1 overflow-x-auto rounded-md border border-line-200 bg-surface-0 p-1">
         <button
           v-for="t in TABS"
           :key="t.key"
-          class="rounded-sm px-3 py-1.5 text-[14px] leading-5 whitespace-nowrap"
+          class="shrink-0 rounded-sm px-3 py-1.5 text-[14px] leading-5 whitespace-nowrap"
           :class="tab === t.key ? 'bg-ink-900 font-medium text-white' : 'text-ink-500 hover:bg-surface-50 hover:text-ink-900'"
           @click="tab = t.key"
         >
@@ -160,14 +160,14 @@ const noiseShare = computed(() =>
           <span class="num ml-1 opacity-70">{{ t.key === 'open' ? openCount : t.key === 'all' ? '' : (dash?.items[t.key] ?? 0) }}</span>
         </button>
       </div>
-      <div class="ml-auto flex items-center gap-3">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center lg:ml-auto">
         <div class="flex items-center gap-2">
-          <span class="text-[13px] leading-[18px] text-ink-500">Group by</span>
-          <div class="flex gap-1 rounded-md border border-line-200 bg-surface-0 p-1">
+          <span class="shrink-0 text-[13px] leading-[18px] text-ink-500">Group by</span>
+          <div class="no-bar flex flex-1 gap-1 overflow-x-auto rounded-md border border-line-200 bg-surface-0 p-1">
             <button
               v-for="g in ['client', 'chat', 'rule', 'none']"
               :key="g"
-              class="rounded-sm px-2.5 py-1 text-[13px] capitalize"
+              class="shrink-0 rounded-sm px-2.5 py-1 text-[13px] capitalize"
               :class="groupBy === g ? 'bg-ink-900 font-medium text-white' : 'text-ink-500 hover:bg-surface-50 hover:text-ink-900'"
               @click="groupBy = g as never"
             >
@@ -175,7 +175,7 @@ const noiseShare = computed(() =>
             </button>
           </div>
         </div>
-        <div class="relative w-56">
+        <div class="relative w-full sm:w-56">
           <Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-400" :stroke-width="1.5" />
           <input v-model="q" class="field pl-9" placeholder="Search items…" aria-label="Search items" />
         </div>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
-import { LayoutDashboard, MessagesSquare, ListChecks, Smartphone, Settings2 } from 'lucide-vue-next'
+import { LayoutDashboard, MessagesSquare, ListChecks, Smartphone, Settings2, X } from 'lucide-vue-next'
 
 defineProps<{ open: boolean }>()
 defineEmits<{ close: [] }>()
@@ -35,17 +35,28 @@ const initials = (name?: string) =>
     class="fixed inset-y-0 left-0 z-40 flex w-[248px] shrink-0 flex-col border-r border-line-200 bg-surface-0 transition-transform duration-[180ms] ease-[cubic-bezier(.2,.8,.2,1)] lg:sticky lg:top-0 lg:h-screen lg:translate-x-0"
     :class="open ? 'translate-x-0' : '-translate-x-full'"
   >
-    <RouterLink to="/" class="flex h-16 items-center gap-2.5 border-b border-line-100 px-5" @click="$emit('close')">
-      <span class="grid size-8 place-items-center rounded-md bg-ink-900">
-        <svg viewBox="0 0 32 32" class="size-[18px]" aria-hidden="true">
-          <path d="M7 9h18M9.5 15.5h13M13 22h6" stroke="#4fb6a9" stroke-width="3" stroke-linecap="round" fill="none" />
-        </svg>
-      </span>
-      <span>
-        <span class="block text-[16px] font-semibold leading-5 tracking-[-0.01em] text-ink-900">Tapis</span>
-        <span class="block text-[12px] leading-4 text-ink-500">chatter into items</span>
-      </span>
-    </RouterLink>
+    <div class="flex h-16 items-center gap-2.5 border-b border-line-100 px-5">
+      <RouterLink to="/" class="flex h-full min-w-0 flex-1 items-center gap-2.5" @click="$emit('close')">
+        <span class="grid size-8 shrink-0 place-items-center rounded-md bg-ink-900">
+          <svg viewBox="0 0 32 32" class="size-[18px]" aria-hidden="true">
+            <path d="M7 9h18M9.5 15.5h13M13 22h6" stroke="#4fb6a9" stroke-width="3" stroke-linecap="round" fill="none" />
+          </svg>
+        </span>
+        <span class="min-w-0">
+          <span class="block truncate text-[16px] font-semibold leading-5 tracking-[-0.01em] text-ink-900">Tapis</span>
+          <span class="block truncate text-[12px] leading-4 text-ink-500">chatter into items</span>
+        </span>
+      </RouterLink>
+      <!-- Tapping the dimmed page closes the drawer too, but that is a thing
+           you have to already know. On a phone the way out should be visible. -->
+      <button
+        class="-mr-2 grid size-10 shrink-0 place-items-center rounded-sm text-ink-400 hover:text-ink-900 lg:hidden"
+        aria-label="Close navigation"
+        @click="$emit('close')"
+      >
+        <X class="size-5" :stroke-width="1.5" />
+      </button>
+    </div>
 
     <nav class="flex-1 space-y-0.5 overflow-y-auto p-3" aria-label="Main">
       <RouterLink
@@ -53,7 +64,7 @@ const initials = (name?: string) =>
         :key="n.to"
         :to="n.to"
         :aria-current="isActive(n.to, n.exact) ? 'page' : undefined"
-        class="flex items-center gap-3 rounded-sm px-3 py-2 text-[15px] leading-[22px]"
+        class="flex items-center gap-3 rounded-sm px-3 py-2.5 text-[15px] leading-[22px] lg:py-2"
         :class="isActive(n.to, n.exact) ? 'bg-primary-50 font-medium text-primary-700' : 'text-ink-500 hover:bg-surface-50 hover:text-ink-900'"
         @click="$emit('close')"
       >
@@ -62,7 +73,7 @@ const initials = (name?: string) =>
       </RouterLink>
     </nav>
 
-    <div class="flex items-center gap-3 border-t border-line-100 p-4">
+    <div class="flex items-center gap-3 border-t border-line-100 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
       <span class="grid size-8 shrink-0 place-items-center rounded-full bg-primary-600 text-[13px] font-semibold text-white">
         {{ initials(auth.user?.name) }}
       </span>

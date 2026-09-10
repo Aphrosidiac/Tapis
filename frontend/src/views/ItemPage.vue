@@ -94,7 +94,7 @@ const KIND_TONE: Record<string, 'accent' | 'info' | 'warn' | 'neutral'> = { ORIG
 
 <template>
   <div v-if="item" class="rise">
-    <RouterLink to="/" class="mb-4 inline-flex items-center gap-1.5 text-[14px] leading-5 text-ink-500 hover:text-ink-900">
+    <RouterLink to="/" class="tap-target mb-2 inline-flex items-center gap-1.5 text-[14px] leading-5 text-ink-500 hover:text-ink-900 lg:mb-4">
       <ArrowLeft class="size-4" :stroke-width="1.5" /> Dashboard
     </RouterLink>
 
@@ -185,7 +185,7 @@ const KIND_TONE: Record<string, 'accent' | 'info' | 'warn' | 'neutral'> = { ORIG
           <p v-for="d in item.deliveries.filter((x) => x.error)" :key="d.id + 'e'" class="mb-1 text-[13px] leading-[18px] text-danger-600">{{ d.error }}</p>
           <div class="mt-3 flex items-end gap-2">
             <div class="min-w-0 flex-1"><BaseInput v-model="sendTo" placeholder="60123456789" /></div>
-            <BaseButton variant="secondary" :loading="busy === 'send'" :disabled="!sendTo" @click="send">
+            <BaseButton variant="secondary" :loading="busy === 'send'" :disabled="!sendTo" @click="send" aria-label="Send this item to that number">
               <Send class="size-4" :stroke-width="1.5" />
             </BaseButton>
           </div>

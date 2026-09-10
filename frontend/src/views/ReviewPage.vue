@@ -121,8 +121,8 @@ const STATUS_TONE: Record<string, 'ok' | 'bad' | 'warn' | 'info'> = { DONE: 'ok'
   <div class="rise">
     <PageHeader title="Review" subtitle="What the filter threw away, every pipeline run, and the corrections it has learned from." />
 
-    <div class="mb-4 flex flex-wrap items-center gap-3">
-      <div class="flex gap-1 rounded-md border border-line-200 bg-surface-0 p-1">
+    <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
+      <div class="no-bar flex gap-1 overflow-x-auto rounded-md border border-line-200 bg-surface-0 p-1">
         <button
           v-for="t2 in [
             ['dismissed', 'Dismissed', total],
@@ -130,16 +130,16 @@ const STATUS_TONE: Record<string, 'ok' | 'bad' | 'warn' | 'info'> = { DONE: 'ok'
             ['learned', 'Learned', feedback.length],
           ]"
           :key="t2[0] as string"
-          class="rounded-sm px-3 py-1.5 text-[14px] leading-5"
+          class="shrink-0 rounded-sm px-3 py-1.5 text-[14px] leading-5"
           :class="tab === t2[0] ? 'bg-ink-900 font-medium text-white' : 'text-ink-500 hover:bg-surface-50 hover:text-ink-900'"
           @click="tab = t2[0] as never"
         >
           {{ t2[1] }} <span class="num opacity-70">{{ t2[2] }}</span>
         </button>
       </div>
-      <div class="ml-auto flex items-center gap-2">
-        <div class="w-52"><BaseSelect v-model="chatId" :options="chats.map((c) => ({ value: c.id, label: c.name }))" placeholder="All chats" /></div>
-        <div v-if="tab === 'dismissed'" class="relative w-52">
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-center lg:ml-auto">
+        <div class="w-full sm:w-52"><BaseSelect v-model="chatId" :options="chats.map((c) => ({ value: c.id, label: c.name }))" placeholder="All chats" /></div>
+        <div v-if="tab === 'dismissed'" class="relative w-full sm:w-52">
           <Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-400" :stroke-width="1.5" />
           <input v-model="q" class="field pl-9" placeholder="Search text…" aria-label="Search dismissed messages" />
         </div>
@@ -153,7 +153,7 @@ const STATUS_TONE: Record<string, 'ok' | 'bad' | 'warn' | 'info'> = { DONE: 'ok'
         hint="Every message the first pass judged as noise lands here. Rescue one and it goes straight to analysis — and the filter is shown it next time as an example of what matters."
       />
       <div v-else class="card divide-y divide-line-100 overflow-hidden">
-        <div v-for="m in dismissed" :key="m.id" class="flex items-start gap-4 px-5 py-3.5">
+        <div v-for="m in dismissed" :key="m.id" class="flex flex-col items-start gap-3 px-5 py-3.5 sm:flex-row sm:gap-4">
           <div class="min-w-0 flex-1">
             <div class="flex flex-wrap items-center gap-x-2 text-[13px] leading-[18px] text-ink-500">
               <span class="font-medium text-ink-900">{{ senderOf(m) }}</span>

@@ -8,7 +8,10 @@ const bar: Record<string, string> = { ok: 'bg-success-600', bad: 'bg-danger-600'
 
 <template>
   <Teleport to="body">
-    <div class="pointer-events-none fixed inset-x-0 bottom-4 z-[100] flex flex-col items-center gap-2 px-4" aria-live="polite">
+    <div
+      class="pointer-events-none fixed inset-x-0 bottom-[max(1rem,env(safe-area-inset-bottom))] z-[100] flex flex-col items-center gap-2 px-4"
+      aria-live="polite"
+    >
       <TransitionGroup
         enter-from-class="translate-y-2 opacity-0"
         leave-to-class="translate-y-1 opacity-0"

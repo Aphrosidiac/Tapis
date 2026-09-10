@@ -186,7 +186,7 @@ const MSG_FILTERS = [
 
 <template>
   <div v-if="chat" class="rise">
-    <RouterLink to="/chats" class="mb-4 inline-flex items-center gap-1.5 text-[14px] leading-5 text-ink-500 hover:text-ink-900">
+    <RouterLink to="/chats" class="tap-target mb-2 inline-flex items-center gap-1.5 text-[14px] leading-5 text-ink-500 hover:text-ink-900 lg:mb-4">
       <ArrowLeft class="size-4" :stroke-width="1.5" /> All chats
     </RouterLink>
 
@@ -207,7 +207,10 @@ const MSG_FILTERS = [
     </PageHeader>
 
     <div class="grid gap-6 lg:grid-cols-2">
-      <div class="space-y-6">
+      <!-- Config is set once; the messages are why anyone opens this on a
+           phone. Ordered messages-first below lg, unchanged on desktop where
+           both columns are visible at once. -->
+      <div class="order-2 space-y-6 lg:order-1">
         <Card title="What this chat is" sub="The models read this before every message, so say who the client is and what the project is about.">
           <div class="space-y-4">
             <BaseInput v-model="ctx.name" label="Chat name" />
@@ -246,10 +249,18 @@ const MSG_FILTERS = [
                   · to {{ [r.toDashboard ? 'dashboard' : '', ...r.toWhatsapp.map((n) => '+' + n)].filter(Boolean).join(', ') || 'nowhere' }}
                 </p>
               </div>
-              <button class="rounded-sm p-1.5 text-ink-400 hover:text-ink-900" aria-label="Edit rule" @click="editing = r; ruleModal = true">
+              <button
+                class="-mr-1 grid size-10 shrink-0 place-items-center rounded-sm text-ink-400 hover:text-ink-900"
+                aria-label="Edit rule"
+                @click="editing = r; ruleModal = true"
+              >
                 <Pencil class="size-4" :stroke-width="1.5" />
               </button>
-              <button class="rounded-sm p-1.5 text-ink-400 hover:text-danger-600" aria-label="Delete rule" @click="removeRule(r)">
+              <button
+                class="-mr-1 grid size-10 shrink-0 place-items-center rounded-sm text-ink-400 hover:text-danger-600"
+                aria-label="Delete rule"
+                @click="removeRule(r)"
+              >
                 <Trash2 class="size-4" :stroke-width="1.5" />
               </button>
             </div>
@@ -276,14 +287,19 @@ const MSG_FILTERS = [
             <BaseInput v-model="sim.senderName" placeholder="Sender name" />
             <BaseInput v-model="sim.senderWaId" placeholder="60123456701" />
           </div>
-          <div class="mt-3 flex items-end gap-2">
+          <div class="mt-3 flex flex-col items-stretch gap-2 sm:flex-row sm:items-end">
             <div class="min-w-0 flex-1"><BaseTextarea v-model="sim.text" :rows="2" placeholder="Message text…" /></div>
             <BaseButton variant="secondary" :disabled="!sim.text.trim()" :loading="busy === 'sim'" @click="simulate">Inject</BaseButton>
           </div>
         </Card>
       </div>
 
-      <Card :title="`Messages`" :sub="`${msgTotal} stored · ${chat.counts.dismissed} dismissed · ${chat.counts.attached} in items`" flush>
+      <Card
+        :title="`Messages`"
+        :sub="`${msgTotal} stored · ${chat.counts.dismissed} dismissed · ${chat.counts.attached} in items`"
+        flush
+        class="order-1 lg:order-2"
+      >
         <template #actions>
           <div class="w-40"><BaseSelect v-model="msgFilter" :options="MSG_FILTERS" placeholder="All messages" /></div>
         </template>
@@ -299,7 +315,7 @@ const MSG_FILTERS = [
               <BaseBadge v-if="m.simulated" tone="neutral">simulated</BaseBadge>
               <button
                 v-if="m.filterStatus === 'DISMISSED'"
-                class="ml-auto inline-flex items-center gap-1.5 text-[13px] font-medium text-primary-700 hover:underline"
+                class="ml-auto inline-flex min-h-8 items-center gap-1.5 rounded-sm px-1 text-[13px] font-medium text-primary-700 hover:underline"
                 :disabled="busy === m.id"
                 @click="rescue(m)"
               >
@@ -308,10 +324,18 @@ const MSG_FILTERS = [
             </div>
             <p class="original mt-1 text-[15px] leading-[22px] text-ink-800">{{ bodyOf(m) }}</p>
             <p v-if="m.filterReason && m.filterStatus !== 'ATTACHED'" class="text-[13px] leading-[18px] text-ink-500 italic">{{ m.filterReason }}</p>
-            <p v-for="l in m.itemLinks" :key="l.itemId" class="mt-0.5 text-[13px] leading-[18px]">
-              →
-              <RouterLink :to="`/items/${l.itemId}`" class="font-medium text-primary-700 hover:underline">{{ l.item.title }}</RouterLink>
-              <span class="text-ink-500"> ({{ l.kind.toLowerCase().replace('_', ' ') }})</span>
+            <p v-for="l in m.itemLinks" :key="l.itemId" class="text-[13px] leading-[18px]">
+              <!-- inline-block, not inline-flex: as a flex box the kind label
+                   was laid out as a second column and a two-line title left
+                   it stranded out to the right. The padding is what makes it
+                   a thumb-sized target while it still wraps like text. -->
+              <RouterLink
+                :to="`/items/${l.itemId}`"
+                class="inline-block py-1 font-medium text-primary-700 hover:underline"
+              >
+                <span aria-hidden="true">→</span> {{ l.item.title }}
+                <span class="font-normal text-ink-500">({{ l.kind.toLowerCase().replace('_', ' ') }})</span>
+              </RouterLink>
             </p>
           </div>
         </div>

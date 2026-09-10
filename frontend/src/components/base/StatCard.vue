@@ -18,12 +18,17 @@ const color: Record<string, string> = {
 </script>
 
 <template>
-  <div class="card p-5">
+  <!-- Tighter below sm. At full size, six of these fill an entire phone
+       screen and push the actual items — the reason anyone opened the app —
+       below two full scrolls. -->
+  <div class="card p-4 sm:p-5">
     <!-- `.eyebrow` is nowrap because a wrapped TABLE header misaligns its
          column. A stat label has no column to misalign and a long one is
          clipped at the card edge on a phone, so it wraps here. -->
     <p class="eyebrow whitespace-normal">{{ label }}</p>
-    <p class="num mt-2 text-[26px] font-semibold leading-8 tracking-[-0.01em]" :class="color[tone]">{{ value }}</p>
-    <p v-if="hint" class="mt-1.5 text-[13px] leading-[18px] text-ink-500">{{ hint }}</p>
+    <p class="num mt-1 text-[22px] font-semibold leading-7 tracking-[-0.01em] sm:mt-2 sm:text-[26px] sm:leading-8" :class="color[tone]">
+      {{ value }}
+    </p>
+    <p v-if="hint" class="mt-1 text-[12.5px] leading-[17px] text-ink-500 sm:mt-1.5 sm:text-[13px] sm:leading-[18px]">{{ hint }}</p>
   </div>
 </template>
