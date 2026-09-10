@@ -171,9 +171,8 @@ const FILTERS = [
           <RouterLink :to="`/chats/${c.id}`" class="min-w-0">
             <!-- The truncate has to sit on the TEXT, not on the flex row. On
                  the row it clips without an ellipsis, because text-overflow
-                 does not apply to an anonymous flex item — real group names
-                 like "(S1 - S3) DAT10102 HUMAN COMPUTER INTERACTIO" just
-                 stopped mid-word. -->
+                 does not apply to an anonymous flex item. Long real group
+                 subjects were being cut mid-word with no ellipsis. -->
             <p class="flex items-center gap-2 text-[15px] font-medium leading-[22px] text-ink-900">
               <component :is="c.isGroup ? Users : User" class="size-4 shrink-0 text-ink-400" :stroke-width="1.5" />
               <span class="truncate">{{ c.name }}</span>
