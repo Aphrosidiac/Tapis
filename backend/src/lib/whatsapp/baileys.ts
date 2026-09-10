@@ -323,9 +323,26 @@ async function openSocket(opts: StartOptions): Promise<BaileysStatus> {
       // Marking the account online takes push notifications away from the
       // human phone. Never.
       markOnlineOnConnect: false,
-      // Recent history only. It is how existing chats become visible; full
-      // history costs minutes of CPU and we store none of the old content.
+      // Do not ask WhatsApp for the entire archive — years of messages cost
+      // minutes of CPU on connect and we store none of the old content.
       syncFullHistory: false,
+      // But DO process the recent/bootstrap sync it sends anyway. This line
+      // is load-bearing and its absence is invisible.
+      //
+      // `makeWASocket` defaults `shouldSyncHistoryMessage` to
+      // `() => !!syncFullHistory`, so leaving it out did not mean "skip the
+      // old messages" — it meant Baileys answered false for INITIAL_BOOTSTRAP
+      // and RECENT too, logged "History sync skipped", and never emitted
+      // `messaging-history.set` at all. The chat list, every last-message
+      // time and every one-to-one chat arrive in exactly that event.
+      //
+      // It also silently costs the app-state sync: `doAppStateSync` only runs
+      // once the socket reaches the `Syncing` state, which only the history
+      // path enters. That is why contacts had no names either — a real
+      // account showed 199 chats, 197 of them groups from
+      // `groupFetchAllParticipating` (which carries no timestamps), 196 of
+      // them reading "never", and contacts as bare numbers.
+      shouldSyncHistoryMessage: () => true,
       generateHighQualityLinkPreview: false,
       qrTimeout: 60_000,
       // Retry receipts ask for the original of something we sent. Our
