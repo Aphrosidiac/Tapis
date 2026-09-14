@@ -52,6 +52,10 @@ let inboundStored = 0
 let inboundIgnored = 0
 
 let attempts = 0
+/// Consecutive closes with a code that LOOKS terminal (401, 440). Neither is
+/// proof on its own — see wireConnection — so the first is retried and only a
+/// run of them is believed. Reset by a successful open.
+let suspectCloses = 0
 let nextRetryAt: Date | null = null
 let retryTimer: NodeJS.Timeout | null = null
 let watchdog: NodeJS.Timeout | null = null
@@ -189,10 +193,10 @@ function cancelRetry() {
   nextRetryAt = null
 }
 
-function scheduleRetry() {
+function scheduleRetry(delayOverride?: number) {
   cancelRetry()
   if (stopping) return
-  const delay = backoffMs(attempts)
+  const delay = delayOverride ?? backoffMs(attempts)
   nextRetryAt = new Date(Date.now() + delay)
   setState('reconnecting')
   retryTimer = setTimeout(() => {
@@ -275,6 +279,13 @@ export async function start(opts: StartOptions = {}): Promise<BaileysStatus> {
     setState('unlinked', null)
     return baileysStatus()
   }
+  // A person asking to link again after the phone removed the device is the
+  // one moment the old keys are cleared — Baileys will not show a QR while a
+  // registered creds file exists, and those creds can only earn another 401.
+  if ((opts.pair || opts.pairWithNumber) && state === 'logged-out') {
+    clearStoredSession()
+    me = null
+  }
   startInFlight = true
   try {
     return await openSocket(opts)
@@ -309,7 +320,9 @@ async function openSocket(opts: StartOptions): Promise<BaileysStatus> {
 
     let version: [number, number, number] | undefined
     try {
-      ;({ version } = await fetchLatestBaileysVersion())
+      // Without a timeout a half-dead network can park this GET for minutes,
+      // and start() holds startInFlight the whole time — no retry can run.
+      ;({ version } = await fetchLatestBaileysVersion({ timeout: 8_000 }))
     } catch {
       version = undefined
     }
@@ -407,6 +420,7 @@ function wireConnection(sock: any, DisconnectReason: any) {
     if (connection === 'open') {
       ghostDevice = null
       attempts = 0
+      suspectCloses = 0
       cancelRetry()
       qrDataUrl = null
       qrIssuedAt = null
@@ -440,23 +454,45 @@ function wireConnection(sock: any, DisconnectReason: any) {
         void start({ pair: Date.now() < pairingDeadline })
         return
       case DisconnectReason.loggedOut:
-        clearStoredSession()
+        // 401. WhatsApp sends it when the phone removed this device — and
+        // also, now and then, to a socket that raced a dying one on the same
+        // keys (every `tsx watch` restart is that race). The first is
+        // permanent, the second heals on the next connect, and the message
+        // does not say which. So the keys are never deleted here: one quiet
+        // retry tells them apart, and even a real logout keeps the files
+        // until a person links again (start({pair}) clears them) or unlinks.
+        suspectCloses += 1
+        if (suspectCloses < 2) {
+          setState('reconnecting', 'WhatsApp reported this device logged out — checking once more before believing it.')
+          scheduleRetry(15_000)
+          return
+        }
         me = null
         setState('logged-out', 'The phone removed this linked device.')
         return
       case DisconnectReason.connectionReplaced:
-        setState('failed', 'Another session took over this WhatsApp link. Only one server may hold it at a time.')
-        return
-      case DisconnectReason.badSession:
-      case DisconnectReason.multideviceMismatch:
-        clearStoredSession()
-        me = null
-        setState('unlinked', 'The stored session was rejected. Link the phone again.')
+        // 440. Either a second process holds these keys, or the socket we
+        // just closed still counted as alive when this one arrived. One is a
+        // race; a run of three is a real second server, and stopping is the
+        // only way to keep the two from knocking each other offline forever.
+        suspectCloses += 1
+        if (suspectCloses < 3) {
+          setState('reconnecting', 'Another connection held this link — trying again shortly.')
+          scheduleRetry(20_000 * suspectCloses)
+          return
+        }
+        setState('failed', 'Another session keeps taking over this WhatsApp link. Only one server may hold it at a time.')
         return
       case DisconnectReason.forbidden:
         setState('failed', 'WhatsApp refused this account. It may be blocked or restricted.')
         return
+      case DisconnectReason.badSession:
+      case DisconnectReason.multideviceMismatch:
       default:
+        // 500 is Baileys' DEFAULT for any stream error it cannot name, and
+        // 411 has meant nothing since multi-device became mandatory. Neither
+        // is evidence the keys are bad. An ordinary retry finds out, and a
+        // genuine rejection comes back as a 401, handled above.
         if (state === 'pairing' && Date.now() >= pairingDeadline) {
           setState('unlinked', 'The pairing code expired before it was scanned.')
           return
@@ -701,6 +737,7 @@ export async function stop(reason = 'stopped'): Promise<BaileysStatus> {
   pairingCode = null
   pairingDeadline = 0
   attempts = 0
+  suspectCloses = 0
   me = null
   setState(hasStoredSession() ? 'off' : 'unlinked', reason === 'stopped' ? null : reason)
   return baileysStatus()

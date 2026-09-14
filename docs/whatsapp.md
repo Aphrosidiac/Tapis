@@ -33,9 +33,17 @@ So:
 - **Sending while not connected throws.** It never silently succeeds and never
   quietly falls back to a mock. A message the operator believes was delivered
   is the worst outcome available.
-- **Terminal reasons stay terminal.** `loggedOut`, `connectionReplaced` and
-  `forbidden` each need a human. Only ordinary drops get exponential backoff,
-  capped at a minute.
+- **The keys are never deleted by a disconnect code.** Only `Unlink`, or
+  linking again after a confirmed logout, removes `.wa-session`. The codes
+  that look terminal are not proof: Baileys reports **500 `badSession`** for
+  *any* stream error it cannot name, WhatsApp sends **401 `loggedOut`** both
+  when the phone removed the device and to a socket that raced a dying one on
+  the same keys (every `tsx watch` restart), and **440 `connectionReplaced`**
+  is usually the connection we just closed still counting as alive. So 500 is
+  an ordinary retry, a 401 is retried once before it is believed, and a 440
+  is retried twice before the link is declared taken. Only `forbidden` stops
+  on the first sight. Ordinary drops get exponential backoff, capped at a
+  minute.
 - **`markOnlineOnConnect: false`.** Marking the account online takes push
   notifications away from the human phone, so staff stop seeing client
   messages on their own device.

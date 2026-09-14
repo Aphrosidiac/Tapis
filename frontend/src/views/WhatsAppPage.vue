@@ -113,7 +113,7 @@ async function unlink() {
               :loading="busy === 'link'"
               @click="call('link', 'link')"
             >
-              <QrCode class="size-4" :stroke-width="1.5" /> {{ link?.hasSession ? 'Reconnect' : 'Show QR code' }}
+              <QrCode class="size-4" :stroke-width="1.5" /> {{ link?.state === 'logged-out' ? 'Link again' : link?.hasSession ? 'Reconnect' : 'Show QR code' }}
             </BaseButton>
             <BaseButton
               v-if="link?.ready || link?.state === 'pairing' || link?.state === 'reconnecting'"
