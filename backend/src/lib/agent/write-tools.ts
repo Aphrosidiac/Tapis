@@ -10,7 +10,7 @@ import { saveSettings, settings, type Settings } from '../settings.js'
 import { formatNewItem } from '../pipeline/deliver.js'
 import { baileysReady, sendText, stop as stopWhatsApp, start as startWhatsApp } from '../whatsapp/baileys.js'
 import { isUsableWaId } from '../input.js'
-import { assertOperatorNumber, isOperatorNumber, operatorNumber } from './guard.js'
+import { assertOperatorNumber, isOperatorNumber, operatorNumber, assertNoOutsideDeliveries } from './guard.js'
 
 /// What the assistant can change. Every write is recorded with what it
 /// found and what it left, and reversed from that record; the ones that
@@ -93,6 +93,7 @@ defineTool({
     const before = { tracked: chat.tracked, clientName: chat.clientName, description: chat.description, trackedSince: chat.trackedSince }
     const data: Record<string, unknown> = {}
     if (input.tracked !== undefined && input.tracked !== chat.tracked) {
+      if (input.tracked) await assertNoOutsideDeliveries(chat.id)
       data.tracked = input.tracked
       if (input.tracked) data.trackedSince = new Date()
     }
@@ -162,6 +163,9 @@ defineTool({
       const other = toWhatsapp.find((n) => !isOperatorNumber(n) && !rule.toWhatsapp.includes(n))
       if (other !== undefined) return { error: `The assistant may not add +${other} as a destination; only the operator's own number (+${operatorNumber() || 'not set'}). The operator can do it on the Chats screen.` }
     }
+    if (input.active === true && !rule.active && toWhatsapp.some((n) => !isOperatorNumber(n))) {
+      return { error: `Refused: switching this rule on would send its matches to +${toWhatsapp.find((n) => !isOperatorNumber(n))}. The assistant may only cause messages to the operator's own number; the operator can switch it on from the Chats screen.` }
+    }
     const toDashboard = input.toDashboard ?? rule.toDashboard
     if (!toDashboard && !toWhatsapp.length) return { error: 'Results must go somewhere: the dashboard, a WhatsApp number, or both' }
     const updated = await prisma.rule.update({
@@ -230,7 +234,10 @@ defineTool({
   description: 'Bundle and analyse whatever is waiting now, for one chat or all, without waiting for the quiet period. Spends model credit. Not undoable.',
   schema: z.object({ chatId: z.string().optional() }),
   summarize: (i) => `Run the pipeline now${i.chatId ? ` for chat ${i.chatId.slice(0, 8)}` : ''}`,
-  run: async ({ chatId }) => tick({ force: true, ...(chatId ? { chatId } : {}) }),
+  run: async ({ chatId }) => {
+    await assertNoOutsideDeliveries(chatId)
+    return tick({ force: true, ...(chatId ? { chatId } : {}) })
+  },
 })
 
 defineTool({
@@ -242,6 +249,7 @@ defineTool({
   run: async ({ bundleId }) => {
     const b = await prisma.bundle.findUnique({ where: { id: bundleId } })
     if (!b) return { error: 'No run with that id' }
+    await assertNoOutsideDeliveries(b.chatId)
     await retryBundle(bundleId)
     const after = await prisma.bundle.findUnique({ where: { id: bundleId } })
     return { ok: true, status: after?.status, error: after?.error, itemsCreated: after?.itemsCreated, itemsUpdated: after?.itemsUpdated }
@@ -255,6 +263,9 @@ defineTool({
   schema: z.object({ messageId: z.string() }),
   summarize: (i) => `Rescue message ${i.messageId.slice(0, 8)}`,
   run: async ({ messageId }) => {
+    const m = await prisma.message.findUnique({ where: { id: messageId }, select: { chatId: true } })
+    if (!m) return { error: 'No message with that id' }
+    await assertNoOutsideDeliveries(m.chatId)
     const bundleId = await rescueMessage(messageId)
     const b = await prisma.bundle.findUnique({ where: { id: bundleId } })
     return { ok: true, bundleId, status: b?.status, itemsCreated: b?.itemsCreated, itemsUpdated: b?.itemsUpdated, error: b?.error }
