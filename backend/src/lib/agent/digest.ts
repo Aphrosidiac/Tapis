@@ -2,7 +2,7 @@ import prisma from '../prisma.js'
 import { settings } from '../settings.js'
 import { startTurn, subscribe } from './run.js'
 import { baileysReady, sendText } from '../whatsapp/baileys.js'
-import { isUsableWaId } from '../input.js'
+import { operatorNumber, assertOperatorNumber } from './guard.js'
 
 /// The morning brief. Once a day, after the configured hour, the assistant
 /// writes what needs the operator today — in its own thread, read-only in
@@ -26,7 +26,7 @@ function local(d: Date, tz: string): { day: string; hour: number } {
 
 export async function maybeDigest(now = new Date()): Promise<boolean> {
   const s = settings()
-  if (!s.agentDigest || !isUsableWaId(s.agentDigestTo)) return false
+  if (!s.agentDigest || !operatorNumber()) return false
   const { day, hour } = local(now, s.timezone)
   if (hour < s.agentDigestHour) return false
   const row = await prisma.appSetting.findUnique({ where: { key: KEY } })
@@ -72,8 +72,9 @@ export async function runDigest(day: string): Promise<{ threadId: string; sent: 
     return { threadId: thread.id, sent: false }
   }
   try {
-    await sendText(s.agentDigestTo, body.slice(0, 3500))
-    logLine(`morning brief sent to +${s.agentDigestTo}`)
+    const to = assertOperatorNumber(operatorNumber())
+    await sendText(to, body.slice(0, 3500))
+    logLine(`morning brief sent to +${to}`)
     return { threadId: thread.id, sent: true }
   } catch (err) {
     logLine('morning brief could not be sent', err)

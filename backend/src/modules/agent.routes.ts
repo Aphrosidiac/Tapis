@@ -149,7 +149,7 @@ export default async function agentRoutes(app: FastifyInstance) {
   /// Writes and sends the morning brief now.
   app.post('/api/agent/digest', async (request, reply) => {
     const s = settings()
-    if (!isUsableWaId(s.agentDigestTo)) return reply.status(400).send({ error: 'Set the number for the morning brief on Settings first' })
+    if (!isUsableWaId(s.operatorWaId)) return reply.status(400).send({ error: 'Set your own number on Settings first' })
     return runDigest(new Date().toISOString().slice(0, 10))
   })
 

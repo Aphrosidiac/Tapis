@@ -4,6 +4,7 @@ import prisma from '../prisma.js'
 import { MEDIA_DIR } from '../paths.js'
 import { mediaReadable } from '../llm/media.js'
 import { isTeam } from '../team.js'
+import { handleControlMessage } from '../agent/whatsapp.js'
 import type { ParsedInbound } from './inbound.js'
 
 /// Where an inbound message goes once parsed. Two rules:
@@ -107,6 +108,8 @@ export interface IngestResult {
 }
 
 export async function handleInbound(parsed: ParsedInbound, download?: MediaDownloader, simulated = false): Promise<IngestResult> {
+  // The operator talking to the assistant is not chatter to sift.
+  if (!simulated && (await handleControlMessage(parsed))) return { stored: false, reason: 'assistant control chat' }
   const chat = await discoverChat({
     jid: parsed.chatJid,
     name: parsed.isGroup ? null : parsed.fromMe ? null : parsed.senderName,

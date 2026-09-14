@@ -172,11 +172,13 @@ async function runTurn(run: Run) {
   const tools = allTools()
   const wire = wireTools(tools)
   await compactIfNeeded(run.threadId)
+  const thread = await prisma.agentThread.findUnique({ where: { id: run.threadId }, select: { kind: true } })
+  const channel = thread?.kind === 'whatsapp' ? '\nThis conversation is over WhatsApp: the operator is on their phone.' : ''
   const history = await prisma.agentMessage.findMany({ where: { threadId: run.threadId }, orderBy: { seq: 'asc' } })
   const messages: WireMessage[] = [
     { role: 'system', content: staticSystemPrompt() },
     { role: 'system', content: await memoryContext() },
-    { role: 'system', content: await liveBrief() },
+    { role: 'system', content: (await liveBrief()) + channel },
     ...toWire(history.map((m) => ({ seq: m.seq, role: m.role, content: m.content as MessageContent }))),
   ]
 

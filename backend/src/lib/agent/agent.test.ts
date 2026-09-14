@@ -59,3 +59,12 @@ test('a compaction row replaces its range in the wire view and nothing else', ()
   assert.equal(wire[1].tool_calls?.[0].function.name, 'get_status')
   assert.equal(wire[2].tool_call_id, 'c1')
 })
+
+test('the assistant can message the operator and nobody else', async () => {
+  const { assertOperatorNumber, isOperatorNumber } = await import('./guard.js')
+  const op = '60100000000'
+  assert.equal(assertOperatorNumber('+60 10-000 0000', op), op)
+  assert.equal(isOperatorNumber('60199899069', op), false)
+  assert.throws(() => assertOperatorNumber('60199899069', op), /only message the operator's own number/)
+  assert.throws(() => assertOperatorNumber(op, ''), /no number it may message/)
+})

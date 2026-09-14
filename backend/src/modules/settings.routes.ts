@@ -51,10 +51,11 @@ export default async function settingsRoutes(app: FastifyInstance) {
     if (body.agentEscalationModel !== undefined) patch.agentEscalationModel = str(body.agentEscalationModel).slice(0, 100) || cur.agentEscalationModel
     if (body.agentReflect !== undefined) patch.agentReflect = bool(body.agentReflect, cur.agentReflect)
     if (body.agentDigest !== undefined) patch.agentDigest = bool(body.agentDigest, cur.agentDigest)
-    if (body.agentDigestTo !== undefined) {
-      const n = waDigits(body.agentDigestTo)
-      if (n && !isUsableWaId(n)) return reply.status(400).send({ error: 'The digest number must be international digits, e.g. 60123456789' })
-      patch.agentDigestTo = n
+    if (body.agentWhatsapp !== undefined) patch.agentWhatsapp = bool(body.agentWhatsapp, cur.agentWhatsapp)
+    if (body.operatorWaId !== undefined) {
+      const n = waDigits(body.operatorWaId)
+      if (n && !isUsableWaId(n)) return reply.status(400).send({ error: 'Your number must be international digits, e.g. 60123456789' })
+      patch.operatorWaId = n
     }
     if (body.agentDigestHour !== undefined) patch.agentDigestHour = int(body.agentDigestHour, cur.agentDigestHour, 0, 23)
     if (body.agentEffort !== undefined) {

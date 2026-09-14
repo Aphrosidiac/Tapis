@@ -47,10 +47,15 @@ export interface Settings {
   agentEffort: 'low' | 'medium' | 'high'
   /// The nightly memory consolidation run.
   agentReflect: boolean
-  /// The morning brief to the operator's WhatsApp.
+  /// The operator's own WhatsApp number — the ONLY number the assistant may
+  /// ever message (see agent/guard.ts). The brief goes here; the control
+  /// chat is this number's own chat on the linked account.
+  operatorWaId: string
+  /// The morning brief.
   agentDigest: boolean
-  agentDigestTo: string
   agentDigestHour: number
+  /// The assistant over WhatsApp: the operator messaging their own number.
+  agentWhatsapp: boolean
 }
 
 export interface SecretSettings {
@@ -79,9 +84,10 @@ export const DEFAULTS: Settings = {
   agentEscalationModel: 'deepseek/deepseek-v4-pro',
   agentEffort: 'medium',
   agentReflect: true,
+  operatorWaId: '',
   agentDigest: false,
-  agentDigestTo: '',
   agentDigestHour: 8,
+  agentWhatsapp: true,
 }
 
 export const LANGUAGE_NAMES: Record<OutputLanguage, string> = {
@@ -111,7 +117,10 @@ function coerce(raw: Partial<Settings> | null | undefined): Settings {
   if (!s.agentEscalationModel) s.agentEscalationModel = DEFAULTS.agentEscalationModel
   if (!['low', 'medium', 'high'].includes(s.agentEffort)) s.agentEffort = DEFAULTS.agentEffort
   s.agentDigestHour = clamp(s.agentDigestHour, 0, 23, DEFAULTS.agentDigestHour)
-  s.agentDigestTo = String(s.agentDigestTo ?? '').replace(/[^0-9]/g, '')
+  // Settings saved before the rule had one field carried the number as
+  // the digest destination; that becomes the operator's number.
+  const legacy = (raw as { agentDigestTo?: string } | null | undefined)?.agentDigestTo
+  s.operatorWaId = String(s.operatorWaId || legacy || '').replace(/[^0-9]/g, '')
   if (!s.filterModel) s.filterModel = DEFAULTS.filterModel
   if (!s.analyzeModel) s.analyzeModel = DEFAULTS.analyzeModel
   // A known model keeps working when the provider changes under it.

@@ -25,6 +25,7 @@ import agentRoutes from './modules/agent.routes.js'
 import { setAgentLogger } from './lib/agent/run.js'
 import { setReflectLogger } from './lib/agent/reflect.js'
 import { setDigestLogger } from './lib/agent/digest.js'
+import { setControlLogger } from './lib/agent/whatsapp.js'
 
 export interface BuildOptions {
   /// Connect the WhatsApp link and run the pipeline. Only the one serving
@@ -64,6 +65,7 @@ export async function buildApp(opts: BuildOptions = {}) {
   setAgentLogger(log)
   setReflectLogger(log)
   setDigestLogger(log)
+  setControlLogger(log)
 
   app.get('/api/health', async () => ({ ok: true }))
   await app.register(authRoutes)

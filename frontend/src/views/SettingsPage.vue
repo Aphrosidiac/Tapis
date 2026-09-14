@@ -36,9 +36,10 @@ interface Settings {
   agentEscalationModel: string
   agentEffort: 'low' | 'medium' | 'high'
   agentReflect: boolean
+  operatorWaId: string
   agentDigest: boolean
-  agentDigestTo: string
   agentDigestHour: number
+  agentWhatsapp: boolean
   keys: { anthropic: KeyView; openrouter: KeyView }
   simulationAllowed: boolean
   mockAllowed: boolean
@@ -231,6 +232,12 @@ const PROVIDERS = computed(() => [
                 { value: 'high', label: 'High — for hard questions' },
               ]"
             />
+            <BaseInput
+              v-model="form.operatorWaId"
+              label="Your own number"
+              placeholder="60123456789"
+              hint="The ONLY WhatsApp number the assistant can ever message — for the morning brief and for talking to it from your phone. It refuses every other number; no approval overrides this."
+            />
             <label class="flex items-start gap-3 py-2">
               <BaseToggle v-model="form.agentReflect!" label="Nightly reflection" />
               <span class="text-[14px] leading-5">
@@ -245,9 +252,15 @@ const PROVIDERS = computed(() => [
                 <span class="text-ink-500">What needs you today — chasing, left sitting, urgent, failures — as one message, written from the data.</span>
               </span>
             </label>
-            <div v-if="form.agentDigest" class="grid gap-3 pl-14 sm:grid-cols-[1fr_8rem]">
-              <BaseInput v-model="form.agentDigestTo" label="Send to" placeholder="60123456789" hint="International digits. Usually your own number." />
-              <BaseInput v-model="form.agentDigestHour" type="number" :min="0" :max="23" label="At (hour)" hint="Local time" />
+            <label class="flex items-start gap-3 py-2">
+              <BaseToggle v-model="form.agentWhatsapp!" label="Assistant over WhatsApp" />
+              <span class="text-[14px] leading-5">
+                <span class="font-medium text-ink-900">Talk to it from your phone.</span><br />
+                <span class="text-ink-500">Message your own number (the “You” chat on the linked account) and it answers there. Anything that needs approval comes with a code — reply YES 1234 or NO 1234. “new” starts a fresh conversation, “stop” cancels. Only works when the linked account is your own number.</span>
+              </span>
+            </label>
+            <div v-if="form.agentDigest" class="pl-14 sm:w-40">
+              <BaseInput v-model="form.agentDigestHour" type="number" :min="0" :max="23" label="Brief at (hour)" hint="Local time, to your own number" />
             </div>
           </div>
         </Card>

@@ -10,6 +10,7 @@ import { saveSettings, settings, type Settings } from '../settings.js'
 import { formatNewItem } from '../pipeline/deliver.js'
 import { baileysReady, sendText, stop as stopWhatsApp, start as startWhatsApp } from '../whatsapp/baileys.js'
 import { isUsableWaId } from '../input.js'
+import { assertOperatorNumber, isOperatorNumber, operatorNumber } from './guard.js'
 
 /// What the assistant can change. Every write is recorded with what it
 /// found and what it left, and reversed from that record; the ones that
@@ -129,6 +130,8 @@ defineTool({
     const toWhatsapp = (input.toWhatsapp ?? []).map((n) => n.replace(/[^0-9]/g, ''))
     const bad = toWhatsapp.find((n) => !isUsableWaId(n))
     if (bad !== undefined) return { error: `"${bad}" is not a WhatsApp number (international digits, e.g. 60123456789)` }
+    const other = toWhatsapp.find((n) => !isOperatorNumber(n))
+    if (other !== undefined) return { error: `A rule written by the assistant may only send to the operator's own number (+${operatorNumber() || 'not set'}), not +${other}. The operator can add other numbers on the Chats screen.` }
     const toDashboard = input.toDashboard ?? true
     if (!toDashboard && !toWhatsapp.length) return { error: 'Results must go somewhere: the dashboard, a WhatsApp number, or both' }
     const rule = await prisma.rule.create({
@@ -155,6 +158,10 @@ defineTool({
     const toWhatsapp = input.toWhatsapp ? input.toWhatsapp.map((n) => n.replace(/[^0-9]/g, '')) : rule.toWhatsapp
     const bad = toWhatsapp.find((n) => !isUsableWaId(n))
     if (bad !== undefined) return { error: `"${bad}" is not a WhatsApp number` }
+    if (input.toWhatsapp) {
+      const other = toWhatsapp.find((n) => !isOperatorNumber(n) && !rule.toWhatsapp.includes(n))
+      if (other !== undefined) return { error: `The assistant may not add +${other} as a destination; only the operator's own number (+${operatorNumber() || 'not set'}). The operator can do it on the Chats screen.` }
+    }
     const toDashboard = input.toDashboard ?? rule.toDashboard
     if (!toDashboard && !toWhatsapp.length) return { error: 'Results must go somewhere: the dashboard, a WhatsApp number, or both' }
     const updated = await prisma.rule.update({
@@ -324,17 +331,25 @@ defineTool({
 
 // ── Outward: the operator confirms first ─────────────────────────────────
 
+/// The fixed rule, stated where the model reads it: the assistant messages
+/// the operator's own number and nobody else. The check is in the tool, not
+/// only the approval: a wrong number is an error result, never a pending
+/// action for someone to approve by mistake.
 defineTool({
   name: 'send_whatsapp',
   tier: 'outward',
   description:
-    'Send a WhatsApp message from the linked account to a number — a reply to a client, a nudge to a team member, a summary to the owner. The operator sees the exact text and approves before anything is sent. Write the message ready to send, in the language the recipient uses.',
-  schema: z.object({ to: z.string().describe('International digits, e.g. 60123456789'), body: z.string().min(1).max(4000) }),
+    "Send a WhatsApp message from the linked account to the OPERATOR'S OWN NUMBER — a summary, a reminder, a draft for them to forward. This is the only number the assistant may ever message; a client's or a team member's number is refused outright, with no approval that lifts it. If the operator wants a client messaged, write the draft in your reply for them to send themselves. The operator approves the exact text before it goes.",
+  schema: z.object({ to: z.string().describe("The operator's own number, international digits. Any other number is refused."), body: z.string().min(1).max(4000) }),
   summarize: (i) => `Send WhatsApp to +${i.to.replace(/[^0-9]/g, '')}: "${clip(i.body, 80)}"`,
   run: async (input, ctx) => {
+    let to: string
+    try {
+      to = assertOperatorNumber(input.to)
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) }
+    }
     if (!ctx.approved) return { error: 'Not approved' }
-    const to = input.to.replace(/[^0-9]/g, '')
-    if (!isUsableWaId(to)) return { error: `"${input.to}" is not a WhatsApp number` }
     if (!baileysReady()) return { error: 'WhatsApp is not connected, so nothing was sent' }
     const id = await sendText(to, input.body)
     return { ok: true, to, waMessageId: id }
@@ -344,13 +359,17 @@ defineTool({
 defineTool({
   name: 'send_item',
   tier: 'outward',
-  description: 'Send an item (title, brief, suggestion, the original messages) to a WhatsApp number in the standard format, whatever its rules say. The operator approves first.',
-  schema: z.object({ itemId: z.string(), to: z.string() }),
+  description: "Send an item (title, brief, suggestion, the original messages) in the standard format to the OPERATOR'S OWN NUMBER — the only number the assistant may message. The operator approves first.",
+  schema: z.object({ itemId: z.string(), to: z.string().describe("The operator's own number. Any other number is refused.") }),
   summarize: (i) => `Send item ${i.itemId.slice(0, 8)} to +${i.to.replace(/[^0-9]/g, '')}`,
   run: async (input, ctx) => {
+    let to: string
+    try {
+      to = assertOperatorNumber(input.to)
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) }
+    }
     if (!ctx.approved) return { error: 'Not approved' }
-    const to = input.to.replace(/[^0-9]/g, '')
-    if (!isUsableWaId(to)) return { error: `"${input.to}" is not a WhatsApp number` }
     const item = await prisma.item.findUnique({
       where: { id: input.itemId },
       include: { chat: true, rules: { select: { rule: true } }, messages: { include: { message: true }, orderBy: { message: { sentAt: 'asc' } } } },
