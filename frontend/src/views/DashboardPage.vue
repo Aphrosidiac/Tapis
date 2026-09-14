@@ -25,6 +25,8 @@ interface Item {
   chasedAt: string | null
   teamStatus?: 'NONE' | 'IN_PROGRESS' | 'RESOLVED'
   teamBy?: string | null
+  /// Activity since the operator last opened it; null until opened once.
+  unread: { messages: number; team: boolean; activity: boolean } | null
 }
 
 interface Bucket { count: number; clients: string[]; moreClients: number }
@@ -335,11 +337,14 @@ function groupAge(items: Item[]): string {
         <!-- A client being quietly ignored should be visible from the header,
              not only by opening every item under it. -->
         <BaseBadge v-if="g.items.some((i) => i.chasedAt && (i.status === 'NEW' || i.status === 'IN_PROGRESS'))" tone="bad">chasing</BaseBadge>
+        <span v-if="g.items.filter((i) => i.unread?.activity).length" class="inline-flex items-center gap-1 text-[13px] leading-[18px] font-medium text-info-600">
+          <span class="size-1.5 rounded-full bg-info-600" /> {{ g.items.filter((i) => i.unread?.activity).length }} updated
+        </span>
         <span v-if="groupAge(g.items)" class="text-[13px] leading-[18px] text-ink-500">{{ groupAge(g.items) }}</span>
         <span class="num ml-auto text-[13px] leading-[18px] text-ink-500">{{ g.items.length }}</span>
       </div>
       <div class="card divide-y divide-line-100 overflow-hidden">
-        <RouterLink v-for="it in g.items" :key="it.id" :to="`/items/${it.id}`" class="flex items-start gap-3 px-5 py-4 hover:bg-surface-50">
+        <RouterLink v-for="it in g.items" :key="it.id" :to="`/items/${it.id}`" class="flex items-start gap-3 px-5 py-4 hover:bg-surface-50" :class="it.unread?.activity && 'bg-info-50/40'">
           <span
             class="mt-1.5 size-2 shrink-0 rounded-full"
             :class="
@@ -359,6 +364,12 @@ function groupAge(items: Item[]): string {
               <p class="text-[15px] font-semibold leading-[22px] text-ink-900">{{ it.title }}</p>
               <BaseBadge :tone="STATUS_TONE[it.status]">{{ STATUS_LABEL[it.status] }}</BaseBadge>
               <BaseBadge v-if="it.priority === 'HIGH' || it.priority === 'URGENT'" :tone="PRIORITY_TONE[it.priority]">{{ it.priority }}</BaseBadge>
+              <!-- Something happened since you last opened it. A count of
+                   new messages when there are any; "updated" for anything
+                   else (a status change, our side's word). -->
+              <span v-if="it.unread?.activity" class="inline-flex items-center gap-1 rounded-full bg-info-600 px-2 py-0.5 text-[12px] font-medium leading-4 text-white">
+                {{ it.unread.messages ? `${it.unread.messages} new message${it.unread.messages === 1 ? '' : 's'}` : it.unread.team ? 'your side replied' : 'updated' }}
+              </span>
               <BaseBadge v-if="it.chasedAt && (it.status === 'NEW' || it.status === 'IN_PROGRESS')" tone="bad">chased {{ ago(it.chasedAt) }}</BaseBadge>
               <BaseBadge v-if="it.teamStatus === 'RESOLVED' && (it.status === 'NEW' || it.status === 'IN_PROGRESS')" tone="ok">{{ it.teamBy === 'us' ? 'you' : it.teamBy || 'your side' }} says done</BaseBadge>
               <BaseBadge v-else-if="it.teamStatus === 'IN_PROGRESS' && it.status === 'NEW'" tone="info">{{ it.teamBy === 'us' ? 'you' : it.teamBy || 'your side' }} on it</BaseBadge>

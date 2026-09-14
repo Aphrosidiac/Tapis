@@ -319,6 +319,9 @@ model Item {
   teamNote   String?    @map("team_note")
   teamBy     String?    @map("team_by")
   teamAt     DateTime?  @map("team_at")
+  /// When the operator last opened it. Activity after this is "new" on
+  /// the list — the badge that says something happened since you looked.
+  lastViewedAt DateTime? @map("last_viewed_at")
   firstMessageAt DateTime @map("first_message_at")
   lastActivityAt DateTime @map("last_activity_at")
   createdAt  DateTime   @default(now()) @map("created_at")

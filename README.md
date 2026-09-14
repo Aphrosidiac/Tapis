@@ -537,6 +537,11 @@ against the same session directory, and never PM2 cluster mode.
 
 Newest first. Every entry below was driven by a real account, not a plan.
 
+**Something happened since you looked** — every item remembers when the
+operator last opened it; the dashboard row shows *1 new message* / *your
+side replied* / *updated* for anything after that, and the client header
+counts them. Opening the item clears it.
+
 **Setup without the typing** — a Getting-started list on the dashboard; a
 *Worth reading* strip of groups your team is in; and a setup sheet that
 opens drafted — client, description, rules, team — from the chat's own

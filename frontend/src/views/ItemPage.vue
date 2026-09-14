@@ -72,7 +72,11 @@ async function load() {
     bad(errorMessage(e))
   }
 }
-onMounted(load)
+onMounted(async () => {
+  await load()
+  // Opening it is reading it: the list's "new" badge clears from here.
+  api.post(`/items/${route.params.id}/viewed`).catch(() => {})
+})
 
 async function update(patch: Record<string, unknown>, label: string) {
   busy.value = label

@@ -64,12 +64,25 @@ export default async function itemRoutes(app: FastifyInstance) {
       prisma.item.findMany({ where, orderBy, skip: (page - 1) * limit, take: limit, include: LIST_INCLUDE }),
       prisma.item.count({ where }),
     ])
+    const links = await prisma.itemMessage.findMany({ where: { itemId: { in: items.map((i) => i.id) } }, select: { itemId: true, createdAt: true } })
+    const linksByItem = new Map<string, Date[]>()
+    for (const l of links) linksByItem.set(l.itemId, [...(linksByItem.get(l.itemId) ?? []), l.createdAt])
     return {
       items: items.map((i) => ({
         ...i,
         rules: i.rules.map((r) => r.rule),
         counts: i._count,
         chasedAt: i.messages[0]?.createdAt ?? null,
+        // What happened since the operator last opened it: attached
+        // messages and our side's word. Nothing until it has been opened
+        // once — a never-opened item is already marked New.
+        unread: i.lastViewedAt
+          ? {
+              messages: (linksByItem.get(i.id) ?? []).filter((t) => t > i.lastViewedAt!).length,
+              team: !!i.teamAt && i.teamAt > i.lastViewedAt,
+              activity: i.lastActivityAt > i.lastViewedAt,
+            }
+          : null,
         _count: undefined,
         messages: undefined,
       })),
@@ -99,6 +112,15 @@ export default async function itemRoutes(app: FastifyInstance) {
         messages: item.messages.map((l) => ({ link: { id: l.id, kind: l.kind, note: l.note }, ...l.message, team: isTeam(l.message.senderWaId) })),
       },
     }
+  })
+
+  /// The operator opened it: everything up to now has been seen.
+  app.post('/api/items/:id/viewed', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const item = await prisma.item.findUnique({ where: { id }, select: { id: true } })
+    if (!item) return reply.status(404).send({ error: 'Item not found' })
+    await prisma.item.update({ where: { id }, data: { lastViewedAt: new Date() } })
+    return { ok: true }
   })
 
   app.put('/api/items/:id', async (request, reply) => {

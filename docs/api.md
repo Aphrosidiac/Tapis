@@ -90,6 +90,7 @@ Numbers are international digits. A rule with no destination is refused.
 |---|---|---|
 | GET | `/items` | filters below |
 | GET | `/items/:id` | with chat, rules, messages, events, deliveries |
+| POST | `/items/:id/viewed` | the operator opened it; list rows carry `unread` relative to this |
 | PUT | `/items/:id` | `{ status?, priority?, title?, note? }` |
 | POST | `/items/:id/send` | `{ to }` — queue this item to a number now |
 

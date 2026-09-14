@@ -402,6 +402,8 @@ async function openSocket(opts: StartOptions): Promise<BaileysStatus> {
       // outbound rows keep the body, so a desynced session can heal.
       getMessage: async (key: { id?: string | null }) => {
         if (!key?.id) return undefined
+        const kept = outboundBody(key.id)
+        if (kept) return { conversation: kept }
         try {
           const row = await prisma.delivery.findFirst({ where: { waMessageId: key.id }, select: { body: true } })
           return row?.body ? { conversation: row.body } : undefined
@@ -773,12 +775,40 @@ function requireReady() {
   return runtime!.sock
 }
 
+/// What we sent, by message id, for the phone's retry requests. A device
+/// that cannot decrypt one of our messages asks for it again through
+/// `getMessage`; deliveries are in the database, everything else — the
+/// assistant's replies, the morning brief — lives here for a while.
+const outbound = new Map<string, string>()
+export function outboundBody(id: string): string | undefined {
+  return outbound.get(id)
+}
+
+/// The recipient's address. Our own number is the special case: the phone
+/// now identifies itself by its LID, and holds one Signal session with this
+/// device under that address. Sending to the phone-number address made
+/// Baileys 6.7 keep a second, diverging session for the same device — the
+/// phone showed "Waiting for this message" and our side logged Bad MAC on
+/// everything it sent back. Addressing ourselves by LID uses the session
+/// the phone actually has.
+function sendJid(to: string): string {
+  const digits = to.replace(/[^0-9]/g, '')
+  const lid = runtime?.sock?.user?.lid as string | undefined
+  if (me?.id && digits === me.id && lid) return `${lid.split(':')[0].split('@')[0]}@lid`
+  return jidFor(to)
+}
+
 export async function sendText(to: string, body: string): Promise<string | null> {
   const sock = requireReady()
-  const res = await sock.sendMessage(jidFor(to), { text: body })
+  const res = await sock.sendMessage(sendJid(to), { text: body })
   lastOutboundAt = new Date()
   touch()
-  return res?.key?.id ?? null
+  const id: string | null = res?.key?.id ?? null
+  if (id) {
+    outbound.set(id, body)
+    if (outbound.size > 500) outbound.delete(outbound.keys().next().value as string)
+  }
+  return id
 }
 
 // ── On-demand history ──────────────────────────────────────────────────────
