@@ -2,7 +2,9 @@
 
 Base path `/api`. Every endpoint except `/api/auth/status`,
 `/api/auth/setup`, `/api/auth/login` and `/api/health` requires
-`Authorization: Bearer <token>`.
+`Authorization: Bearer <token>` — header only, never a query string. Tokens
+last 7 days and every one is retired the moment the password changes. Login
+and setup allow 10 attempts a minute per address.
 
 Errors are `{ "error": "a sentence a person can act on" }` with a real status
 code. A 500 says only "Something went wrong on the server"; the detail is in
@@ -21,7 +23,7 @@ seeded default password.
 | POST | `/auth/setup` | `{ email, password, name }` → `{ token, user }`. 409 once an account exists. |
 | POST | `/auth/login` | `{ email, password }` → `{ token, user }` |
 | GET | `/auth/me` | the signed-in user |
-| PUT | `/auth/me` | `{ name?, currentPassword?, password? }` |
+| PUT | `/auth/me` | `{ name?, currentPassword?, password? }` → `{ user, token? }` — a new `token` comes back when the password changed, because the old one is now dead |
 
 Tokens are JWTs valid for 7 days. The user row is re-read on every request, so
 a deleted account stops working immediately.

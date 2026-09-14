@@ -132,8 +132,10 @@ async function runTest() {
 async function saveAccount() {
   busy.value = 'account'
   try {
-    const { data } = await api.put<{ user: { id: string; email: string; name: string } }>('/auth/me', account)
-    auth.user = data.user
+    const { data } = await api.put<{ user: { id: string; email: string; name: string }; token?: string }>('/auth/me', account)
+    // A password change retires the old token server-side; keep the new one.
+    if (data.token) auth.accept(data.token, data.user)
+    else auth.user = data.user
     account.currentPassword = ''
     account.password = ''
     ok('Account updated')

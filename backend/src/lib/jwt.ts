@@ -13,10 +13,13 @@ const secret = SECRET || 'tapis-dev-secret'
 
 export interface TokenPayload {
   id: string
+  /// The user's tokenVersion at signing. Missing on tokens from before the
+  /// field existed, which authenticate treats as 0.
+  v?: number
   iat?: number
 }
 
-export function sign(payload: { id: string }): string {
+export function sign(payload: { id: string; v: number }): string {
   return jwt.sign(payload, secret, { expiresIn: '7d' })
 }
 

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
-import { api, errorMessage, mediaUrl } from '../lib/api'
+import { api, errorMessage } from '../lib/api'
+import MediaSrc from '../components/MediaSrc.vue'
 import { useToast } from '../composables/useToast'
 import { fmtDateTime, ago, senderOf, bodyOf, STATUS_LABEL, STATUS_TONE, PRIORITY_TONE } from '../lib/format'
 import Card from '../components/base/Card.vue'
@@ -140,8 +141,12 @@ const KIND_TONE: Record<string, 'accent' | 'info' | 'warn' | 'neutral'> = { ORIG
                 <BaseBadge :tone="KIND_TONE[m.link.kind]">{{ KIND[m.link.kind] }}</BaseBadge>
               </div>
               <p class="original mt-1.5 text-[15px] leading-[22px] text-ink-800">{{ bodyOf(m) }}</p>
-              <img v-if="m.type === 'IMAGE' && m.mediaPath" :src="mediaUrl(m.id)" alt="" class="mt-3 max-h-80 rounded-md border border-line-200" />
-              <audio v-else-if="m.type === 'AUDIO' && m.mediaPath" :src="mediaUrl(m.id)" controls class="mt-3 h-9 w-full max-w-sm" />
+              <MediaSrc v-if="m.type === 'IMAGE' && m.mediaPath" v-slot="{ src }" :message-id="m.id">
+                <img :src="src" alt="" class="mt-3 max-h-80 rounded-md border border-line-200" />
+              </MediaSrc>
+              <MediaSrc v-else-if="m.type === 'AUDIO' && m.mediaPath" v-slot="{ src }" :message-id="m.id">
+                <audio :src="src" controls class="mt-3 h-9 w-full max-w-sm" />
+              </MediaSrc>
               <p v-if="m.link.note" class="mt-1.5 text-[14px] leading-5 text-ink-500 italic">{{ m.link.note }}</p>
             </div>
           </div>

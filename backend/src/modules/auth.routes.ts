@@ -28,7 +28,7 @@ export default async function authRoutes(app: FastifyInstance) {
     if (p.length < 8) return reply.status(400).send({ error: 'Use a password of at least 8 characters' })
     if (!n) return reply.status(400).send({ error: 'Enter your name' })
     const user = await prisma.user.create({ data: { email: e, password: await bcrypt.hash(p, 12), name: n } })
-    return { token: sign({ id: user.id }), user: { id: user.id, email: user.email, name: user.name } }
+    return { token: sign({ id: user.id, v: user.tokenVersion }), user: { id: user.id, email: user.email, name: user.name } }
   })
 
   app.post('/api/auth/login', guarded, async (request, reply) => {
@@ -37,7 +37,7 @@ export default async function authRoutes(app: FastifyInstance) {
     if (!user || !(await bcrypt.compare(str(password), user.password))) {
       return reply.status(401).send({ error: 'Wrong email or password' })
     }
-    return { token: sign({ id: user.id }), user: { id: user.id, email: user.email, name: user.name } }
+    return { token: sign({ id: user.id, v: user.tokenVersion }), user: { id: user.id, email: user.email, name: user.name } }
   })
 
   app.get('/api/auth/me', { preHandler: authenticate }, async (request) => ({ user: request.user }))
@@ -54,7 +54,13 @@ export default async function authRoutes(app: FastifyInstance) {
       if (str(password).length < 8) return reply.status(400).send({ error: 'Use a password of at least 8 characters' })
       data.password = await bcrypt.hash(str(password), 12)
     }
-    const user = await prisma.user.update({ where: { id: request.user.id }, data, select: { id: true, email: true, name: true } })
-    return { user }
+    // A new password retires every token signed under the old one — including
+    // the caller's, so a fresh one goes back with the reply.
+    const user = await prisma.user.update({
+      where: { id: request.user.id },
+      data: { ...data, ...(data.password ? { tokenVersion: { increment: 1 } } : {}) },
+      select: { id: true, email: true, name: true, tokenVersion: true },
+    })
+    return { user: { id: user.id, email: user.email, name: user.name }, ...(data.password ? { token: sign({ id: user.id, v: user.tokenVersion }) } : {}) }
   })
 }

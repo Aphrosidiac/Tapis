@@ -26,6 +26,10 @@ export function errorMessage(e: unknown): string {
   return err.response?.data?.error || err.message || 'Something went wrong'
 }
 
-export function mediaUrl(messageId: string): string {
-  return `/api/media/${messageId}?token=${encodeURIComponent(localStorage.getItem(TOKEN_KEY) ?? '')}`
+/// Media is fetched with the Authorization header like every other call
+/// and handed to <img>/<audio> as an object URL — a token never sits in a
+/// URL, a proxy log, or a browser history. Revoke it when the element goes.
+export async function fetchMediaObjectUrl(messageId: string): Promise<string> {
+  const { data } = await api.get<Blob>(`/media/${messageId}`, { responseType: 'blob' })
+  return URL.createObjectURL(data)
 }
