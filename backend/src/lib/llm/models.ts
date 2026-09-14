@@ -24,8 +24,19 @@ export const MODELS: ModelInfo[] = [
   { key: 'fable-5.1', label: 'Claude Fable 5.1 — most capable, most expensive', anthropic: 'claude-fable-5-1', openrouter: 'anthropic/claude-fable-5.1', in: 10, out: 50, effort: true },
 ]
 
+/// Models that take audio, for transcribing voice notes. OpenRouter ids
+/// only — Claude has no audio input. Prices are per million text tokens;
+/// audio tokens on these are priced at or below the text rate, so the
+/// estimate errs high rather than low.
+export const AUDIO_MODELS: ModelInfo[] = [
+  { key: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash — recommended for voice notes', anthropic: '', openrouter: 'google/gemini-3.8-flash', in: 0.75, out: 3.75, effort: false },
+  { key: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash Lite — cheapest', anthropic: '', openrouter: 'google/gemini-3.5-flash-lite', in: 0.3, out: 2.5, effort: false },
+  { key: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro — for hard audio', anthropic: '', openrouter: 'google/gemini-3.1-pro-preview', in: 2, out: 12, effort: false },
+  { key: 'gpt-audio-mini', label: 'GPT Audio Mini', anthropic: '', openrouter: 'openai/gpt-audio-mini', in: 0.6, out: 2.4, effort: false },
+]
+
 export function modelInfo(id: string): ModelInfo | null {
-  return MODELS.find((m) => m.anthropic === id || m.openrouter === id) ?? null
+  return MODELS.find((m) => m.anthropic === id || m.openrouter === id) ?? AUDIO_MODELS.find((m) => m.openrouter === id) ?? null
 }
 
 export function supportsEffort(id: string): boolean {

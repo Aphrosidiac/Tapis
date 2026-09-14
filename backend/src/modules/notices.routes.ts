@@ -3,7 +3,7 @@ import prisma from '../lib/prisma.js'
 import { authenticate } from '../middleware/auth.js'
 import { baileysStatus } from '../lib/whatsapp/baileys.js'
 import { llmConfigured } from '../lib/llm/client.js'
-import { settings } from '../lib/settings.js'
+import { settings, transcriptionConfigured } from '../lib/settings.js'
 
 /// Everything that currently needs a person, in one call.
 ///
@@ -85,6 +85,20 @@ export default async function noticeRoutes(app: FastifyInstance) {
         to: '/review',
         action: 'Review and retry',
       })
+    }
+
+    if (s.transcribeVoice && !transcriptionConfigured()) {
+      const unread = await prisma.message.count({ where: { type: 'AUDIO', mediaTextStatus: { in: ['PENDING', 'FAILED'] } } })
+      if (unread) {
+        notices.push({
+          id: 'voice-needs-openrouter',
+          tone: 'warning',
+          title: `${unread} voice note${unread === 1 ? '' : 's'} could not be transcribed`,
+          body: 'The Anthropic API takes no audio, so voice notes are transcribed through OpenRouter. Add an OpenRouter key on Settings and press "Read again" on a voice note.',
+          to: '/settings',
+          action: 'Add an OpenRouter key',
+        })
+      }
     }
 
     if (failedDeliveries) {

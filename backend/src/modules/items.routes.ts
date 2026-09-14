@@ -117,7 +117,7 @@ export default async function itemRoutes(app: FastifyInstance) {
           const origins = await prisma.message.findMany({ where: { id: { in: existing.messages.filter((m) => m.kind === 'ORIGIN').map((m) => m.messageId) } } })
           if (origins.length) {
             await prisma.feedback.createMany({
-              data: origins.map((m) => ({ chatId: existing.chatId, messageId: m.id, kind: 'FALSE_POSITIVE' as const, text: (m.text || `[${m.type.toLowerCase()}]`).slice(0, 500) })),
+              data: origins.map((m) => ({ chatId: existing.chatId, messageId: m.id, kind: 'FALSE_POSITIVE' as const, text: (m.text || (m.mediaTextStatus === 'DONE' && m.mediaText) || `[${m.type.toLowerCase()}]`).slice(0, 500) })),
             })
           }
         }

@@ -62,6 +62,7 @@ interesting part.
 | GET | `/chats/:id` | chat with rules, participants and message counts |
 | PUT | `/chats/:id` | `{ tracked?, clientName?, description?, name? }` |
 | GET | `/chats/:id/messages` | `?status=&q=&page=&limit=` |
+| POST | `/messages/:id/read-media` | transcribe / describe the message's media again → `{ message }` |
 | POST | `/chats/:id/run` | bundle and process now |
 | POST | `/chats/:id/rules` | create a rule |
 | PUT | `/rules/:id` | update, or `{ active }` alone to toggle |

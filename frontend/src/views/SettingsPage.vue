@@ -27,6 +27,9 @@ interface Settings {
   contextMessages: number
   allowSimulation: boolean
   analyzeImages: boolean
+  describeImages: boolean
+  transcribeVoice: boolean
+  transcribeModel: string
   keys: { anthropic: KeyView; openrouter: KeyView }
   simulationAllowed: boolean
   mockAllowed: boolean
@@ -38,6 +41,7 @@ const auth = useAuthStore()
 const notices = useNoticesStore()
 const s = ref<Settings | null>(null)
 const models = ref<Model[]>([])
+const audioModels = ref<Model[]>([])
 const form = reactive<Partial<Settings>>({})
 const keys = reactive({ anthropic: '', openrouter: '' })
 const busy = ref('')
@@ -45,9 +49,10 @@ const test = ref<{ ok: boolean; message: string } | null>(null)
 const account = reactive({ name: '', currentPassword: '', password: '' })
 
 async function load() {
-  const { data } = await api.get<{ settings: Settings; models: Model[] }>('/settings')
+  const { data } = await api.get<{ settings: Settings; models: Model[]; audioModels: Model[] }>('/settings')
   s.value = data.settings
   models.value = data.models
+  audioModels.value = data.audioModels
   Object.assign(form, data.settings)
   account.name = auth.user?.name ?? ''
 }
@@ -201,6 +206,28 @@ const PROVIDERS = computed(() => [
               <span class="text-ink-500">Screenshots of bugs are usually the report. Costs a little more per image.</span>
             </span>
           </label>
+          <label class="flex items-start gap-3 py-2">
+            <BaseToggle v-model="form.describeImages!" label="Describe images" />
+            <span class="text-[14px] leading-5">
+              <span class="font-medium text-ink-900">Read every image before it is judged.</span><br />
+              <span class="text-ink-500">The filter model writes what the picture shows and any text in it, so a screenshot with no caption is judged on what it contains. One cheap call per image; the reading is shown under the message.</span>
+            </span>
+          </label>
+          <label class="flex items-start gap-3 py-2">
+            <BaseToggle v-model="form.transcribeVoice!" label="Transcribe voice notes" />
+            <span class="text-[14px] leading-5">
+              <span class="font-medium text-ink-900">Transcribe every voice note before it is judged.</span><br />
+              <span class="text-ink-500">Verbatim, in whatever mix of Malay, English and Chinese was spoken. Needs an OpenRouter key whatever the provider — the Anthropic API takes no audio. A 30-second note costs well under a cent.</span>
+            </span>
+          </label>
+          <div v-if="form.transcribeVoice" class="py-2 pl-14">
+            <BaseSelect
+              v-model="form.transcribeModel"
+              label="Transcription model"
+              :options="[...new Set([form.transcribeModel!, ...audioModels.map((m) => m.openrouter)])].map((id) => ({ value: id, label: audioModels.find((m) => m.openrouter === id) ? `${audioModels.find((m) => m.openrouter === id)!.label} · $${audioModels.find((m) => m.openrouter === id)!.in}/$${audioModels.find((m) => m.openrouter === id)!.out} per M tokens` : id }))"
+              :hint="s?.keys.openrouter.configured ? 'Always called through OpenRouter.' : 'No OpenRouter key yet — add one above or voice notes stay untranscribed.'"
+            />
+          </div>
           <label class="flex items-start gap-3 py-2">
             <BaseToggle v-model="form.allowSimulation!" label="Allow simulation" />
             <span class="text-[14px] leading-5">

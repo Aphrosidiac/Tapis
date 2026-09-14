@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { api, errorMessage } from '../lib/api'
 import MediaSrc from '../components/MediaSrc.vue'
+import MediaText, { type MediaTextMessage } from '../components/MediaText.vue'
 import { useToast } from '../composables/useToast'
 import { fmtDateTime, ago, senderOf, bodyOf, STATUS_LABEL, STATUS_TONE, PRIORITY_TONE } from '../lib/format'
 import Card from '../components/base/Card.vue'
@@ -21,6 +22,10 @@ interface Msg {
   type: string
   text: string | null
   mediaPath: string | null
+  mediaText?: string | null
+  mediaTextStatus?: string
+  mediaTextError?: string | null
+  mediaTextModel?: string | null
   mediaMime: string | null
   sentAt: string
   filterReason: string | null
@@ -91,6 +96,9 @@ async function send() {
 
 const KIND: Record<string, string> = { ORIGIN: 'Original', DETAIL: 'More detail', STATUS_CHECK: 'Status check', FOLLOW_UP: 'Follow-up' }
 const KIND_TONE: Record<string, 'accent' | 'info' | 'warn' | 'neutral'> = { ORIGIN: 'accent', DETAIL: 'info', STATUS_CHECK: 'warn', FOLLOW_UP: 'neutral' }
+function patchMessage(target: { id: string } & Record<string, unknown>, u: MediaTextMessage) {
+  Object.assign(target, { mediaText: u.mediaText, mediaTextStatus: u.mediaTextStatus, mediaTextError: u.mediaTextError, mediaTextModel: u.mediaTextModel })
+}
 </script>
 
 <template>
@@ -147,6 +155,7 @@ const KIND_TONE: Record<string, 'accent' | 'info' | 'warn' | 'neutral'> = { ORIG
               <MediaSrc v-else-if="m.type === 'AUDIO' && m.mediaPath" v-slot="{ src }" :message-id="m.id">
                 <audio :src="src" controls class="mt-3 h-9 w-full max-w-sm" />
               </MediaSrc>
+              <MediaText :message="m" @updated="(u) => patchMessage(m, u)" />
               <p v-if="m.link.note" class="mt-1.5 text-[14px] leading-5 text-ink-500 italic">{{ m.link.note }}</p>
             </div>
           </div>

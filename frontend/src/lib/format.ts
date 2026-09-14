@@ -50,7 +50,7 @@ export function bodyOf(m: { type: string; text?: string | null }): string {
     case 'TEXT': return t || '(empty)'
     case 'IMAGE': return t ? `📷 ${t}` : '📷 Image'
     case 'VIDEO': return t ? `🎬 ${t}` : '🎬 Video'
-    case 'AUDIO': return '🎤 Voice note (not transcribed yet)'
+    case 'AUDIO': return '🎤 Voice note'
     case 'DOCUMENT': return t ? `📄 ${t}` : '📄 Document'
     case 'STICKER': return 'Sticker'
     case 'LOCATION': return '📍 Location'

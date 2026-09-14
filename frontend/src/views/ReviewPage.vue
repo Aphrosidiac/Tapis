@@ -5,6 +5,7 @@ import { api, errorMessage } from '../lib/api'
 import { useToast } from '../composables/useToast'
 import { usePolling } from '../composables/usePolling'
 import { fmtDateTime, ago, senderOf, bodyOf } from '../lib/format'
+import MediaText from '../components/MediaText.vue'
 import PageHeader from '../components/base/PageHeader.vue'
 import BaseBadge from '../components/base/BaseBadge.vue'
 import BaseButton from '../components/base/BaseButton.vue'
@@ -21,6 +22,11 @@ interface Msg {
   text: string | null
   sentAt: string
   filterReason: string | null
+  mediaPath?: string | null
+  mediaText?: string | null
+  mediaTextStatus?: string
+  mediaTextError?: string | null
+  mediaTextModel?: string | null
   chat: { id: string; name: string; clientName: string | null }
 }
 interface Call { kind: string; model: string; inputTokens: number; outputTokens: number; cacheReadTokens: number; latencyMs: number; ok: boolean }
@@ -163,6 +169,7 @@ const STATUS_TONE: Record<string, 'ok' | 'bad' | 'warn' | 'info'> = { DONE: 'ok'
               <span>{{ fmtDateTime(m.sentAt) }}</span>
             </div>
             <p class="original mt-1 text-[15px] leading-[22px] text-ink-800">{{ bodyOf(m) }}</p>
+            <MediaText :message="m" @updated="(u) => Object.assign(m, u)" />
             <p class="text-[13px] leading-[18px] text-ink-500 italic">{{ m.filterReason }}</p>
           </div>
           <BaseButton size="sm" variant="secondary" :loading="busy === m.id" @click="rescue(m)">

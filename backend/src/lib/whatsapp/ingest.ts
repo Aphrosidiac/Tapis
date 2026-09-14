@@ -2,6 +2,7 @@ import { mkdir, writeFile } from 'fs/promises'
 import { join } from 'path'
 import prisma from '../prisma.js'
 import { MEDIA_DIR } from '../paths.js'
+import { mediaReadable } from '../llm/media.js'
 import type { ParsedInbound } from './inbound.js'
 
 /// Where an inbound message goes once parsed. Two rules:
@@ -166,6 +167,8 @@ export async function handleInbound(parsed: ParsedInbound, download?: MediaDownl
       text: parsed.text,
       mediaPath,
       mediaMime,
+      // Read before it is judged — see lib/llm/media.ts.
+      mediaTextStatus: mediaPath && mediaReadable(parsed.type, mediaMime) ? 'PENDING' : 'NONE',
       quotedWaMessageId: parsed.quotedWaMessageId,
       sentAt: parsed.timestamp,
       simulated,

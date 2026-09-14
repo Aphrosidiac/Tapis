@@ -3,7 +3,7 @@ import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import { z } from 'zod'
 import prisma from '../prisma.js'
 import { settings, providerApiKey, secret } from '../settings.js'
-import { supportsEffort, MODELS } from './models.js'
+import { supportsEffort, MODELS, AUDIO_MODELS } from './models.js'
 import { mockCall } from './mock.js'
 
 /// One place that talks to a model. Two providers behind one call:
@@ -26,7 +26,7 @@ export interface ImageInput {
 }
 
 export interface ParsedCallOptions<T> {
-  kind: 'FILTER' | 'ANALYZE'
+  kind: 'FILTER' | 'ANALYZE' | 'MEDIA'
   /// What the mock provider answers with, when it is the provider.
   mock?: () => unknown
   model: string
@@ -160,7 +160,7 @@ async function viaOpenRouter<T>(opts: ParsedCallOptions<T>): Promise<{ data: T; 
     headers: {
       Authorization: `Bearer ${key}`,
       'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://github.com/LewixAI/Tapis',
+      'HTTP-Referer': 'https://github.com/Aphrosidiac/Tapis',
       'X-Title': 'Tapis',
     },
     body: JSON.stringify(body),
@@ -182,6 +182,105 @@ async function viaOpenRouter<T>(opts: ParsedCallOptions<T>): Promise<{ data: T; 
   if (choice?.finish_reason === 'length') throw new Error(`The model ran out of output tokens (${opts.maxTokens}) before finishing`)
   const text: string = typeof choice?.message?.content === 'string' ? choice.message.content : ''
   return { data: validate(opts.schema, text), usage }
+}
+
+// ── Audio ──────────────────────────────────────────────────────────────────
+
+const AUDIO_FORMATS: Record<string, string> = {
+  'audio/ogg': 'ogg',
+  'audio/opus': 'ogg',
+  'audio/mpeg': 'mp3',
+  'audio/mp3': 'mp3',
+  'audio/mp4': 'm4a',
+  'audio/m4a': 'm4a',
+  'audio/aac': 'aac',
+  'audio/wav': 'wav',
+  'audio/x-wav': 'wav',
+  'audio/flac': 'flac',
+  'audio/aiff': 'aiff',
+}
+
+export const TranscriptOutput = z.object({
+  /// Verbatim, in the language spoken. Empty when nothing intelligible.
+  transcript: z.string(),
+  /// e.g. "Malay", "English and Chinese".
+  language: z.string(),
+  /// True when the audio is silence, music, or unintelligible.
+  unintelligible: z.boolean(),
+})
+export type Transcript = z.infer<typeof TranscriptOutput>
+
+export interface TranscribeOptions {
+  audio: Buffer
+  mime: string
+  model: string
+  /// Chat context that helps a listener: who is talking, what the project is.
+  hint: string
+  mock?: () => unknown
+}
+
+const TRANSCRIBE_SYSTEM = `You transcribe WhatsApp voice notes for a business that tracks client requests. The speaker may use Malay, English, Chinese, or all three in one sentence — often Malaysian colloquial speech.
+
+Write down exactly what is said, in the language it is said, as the speaker would write it themselves. Keep the code-switching; do not translate. Use normal punctuation. Leave out filler ("um", "eh") unless it carries meaning. Never invent words you cannot hear: mark an unclear stretch as [unclear]. If there is no speech, say so with an empty transcript and unintelligible=true.`
+
+/// Listens to one voice note. Always OpenRouter: the Anthropic API has no
+/// audio input, so this is the one call that needs that key whatever the
+/// provider setting says.
+export async function callTranscribe(opts: TranscribeOptions): Promise<Transcript> {
+  const started = Date.now()
+  const record_ = (usage: Usage | null, ok: boolean, error: string | null) =>
+    record({ kind: 'MEDIA', model: opts.model, system: '', text: '', schema: TranscriptOutput, maxTokens: 0 }, usage, Date.now() - started, ok, error)
+  try {
+    if (settings().provider === 'mock') {
+      if (!opts.mock) throw new Error('The mock provider has no transcript for this call')
+      const data = mockCall(TranscriptOutput, opts.mock)
+      await record_({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, true, null)
+      return data
+    }
+    const key = secret('openrouterApiKey')
+    if (!key) throw new Error('Voice notes need an OpenRouter API key — the Anthropic API takes no audio. Add one on the Settings screen.')
+    const format = AUDIO_FORMATS[opts.mime.split(';')[0].trim().toLowerCase()]
+    if (!format) throw new Error(`Audio type "${opts.mime}" is not one the transcription model accepts`)
+
+    const body = {
+      model: opts.model,
+      messages: [
+        { role: 'system', content: TRANSCRIBE_SYSTEM },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: `Context: ${opts.hint}\n\nTranscribe this voice note.` },
+            { type: 'input_audio', input_audio: { data: opts.audio.toString('base64'), format } },
+          ],
+        },
+      ],
+      max_tokens: 4096,
+      response_format: { type: 'json_schema', json_schema: { name: 'transcript', strict: true, schema: z.toJSONSchema(TranscriptOutput) } },
+    }
+    const res = await fetch(OPENROUTER_URL, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://github.com/Aphrosidiac/Tapis', 'X-Title': 'Tapis' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(180_000),
+    })
+    const json: any = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(String(json?.error?.message ?? `OpenRouter returned ${res.status}`).replace(key, '••••'))
+    const choice = json?.choices?.[0]
+    const usage: Usage = {
+      input: Number(json?.usage?.prompt_tokens ?? 0) - Number(json?.usage?.prompt_tokens_details?.cached_tokens ?? 0),
+      output: Number(json?.usage?.completion_tokens ?? 0),
+      cacheRead: Number(json?.usage?.prompt_tokens_details?.cached_tokens ?? 0),
+      cacheWrite: 0,
+    }
+    if (choice?.message?.refusal) throw new LlmRefusal(`The model declined this request: ${choice.message.refusal}`)
+    const text: string = typeof choice?.message?.content === 'string' ? choice.message.content : ''
+    const data = validate(TranscriptOutput, text)
+    await record_(usage, true, null)
+    return data
+  } catch (err) {
+    await record_(null, false, err instanceof Error ? err.message : String(err))
+    throw err
+  }
 }
 
 // ── Shared ─────────────────────────────────────────────────────────────────
@@ -252,4 +351,8 @@ export async function testProvider(): Promise<{ ok: boolean; message: string }> 
 
 export function modelCatalogue() {
   return MODELS
+}
+
+export function audioModelCatalogue() {
+  return AUDIO_MODELS
 }

@@ -5,6 +5,7 @@ import { api, errorMessage } from '../lib/api'
 import { useToast } from '../composables/useToast'
 import { usePolling } from '../composables/usePolling'
 import { fmtDateTime, senderOf, bodyOf, FILTER_LABEL, FILTER_TONE } from '../lib/format'
+import MediaText from '../components/MediaText.vue'
 import PageHeader from '../components/base/PageHeader.vue'
 import Card from '../components/base/Card.vue'
 import BaseInput from '../components/base/BaseInput.vue'
@@ -43,6 +44,11 @@ interface Msg {
   filterStatus: string
   filterReason: string | null
   simulated: boolean
+  mediaPath?: string | null
+  mediaText?: string | null
+  mediaTextStatus?: string
+  mediaTextError?: string | null
+  mediaTextModel?: string | null
   itemLinks: { itemId: string; kind: string; item: { title: string; status: string } }[]
 }
 
@@ -323,6 +329,7 @@ const MSG_FILTERS = [
               </button>
             </div>
             <p class="original mt-1 text-[15px] leading-[22px] text-ink-800">{{ bodyOf(m) }}</p>
+            <MediaText :message="m" @updated="(u) => Object.assign(m, u)" />
             <p v-if="m.filterReason && m.filterStatus !== 'ATTACHED'" class="text-[13px] leading-[18px] text-ink-500 italic">{{ m.filterReason }}</p>
             <p v-for="l in m.itemLinks" :key="l.itemId" class="text-[13px] leading-[18px]">
               <!-- inline-block, not inline-flex: as a flex box the kind label

@@ -3,6 +3,7 @@ import { settings } from '../settings.js'
 import { llmConfigured } from '../llm/client.js'
 import { runFilter } from '../llm/filter.js'
 import { runAnalysis } from '../llm/analyze.js'
+import { understandMedia } from '../llm/media.js'
 import { applyActions } from './items.js'
 
 /// Bundling and the two passes.
@@ -110,6 +111,20 @@ export async function processBundle(bundleId: string): Promise<void> {
   ).reverse()
   const feedback = await prisma.feedback.findMany({ where: { chatId: chat.id }, orderBy: { createdAt: 'desc' }, take: 12 })
 
+  // ── Read the media ──
+  // Voice notes and images are read before anyone judges them, so the
+  // filter sees words rather than "[voice note]". A read that fails is a
+  // note on that message, not a failed bundle.
+  const media = await understandMedia(chat, batch)
+  if (media.read || media.failed) {
+    logLine(`bundle ${bundleId.slice(0, 8)}: read ${media.read} media, ${media.failed} failed`)
+    const fresh = await prisma.message.findMany({ where: { id: { in: batch.map((m) => m.id) } } })
+    for (const m of batch) {
+      const f = fresh.find((x) => x.id === m.id)
+      if (f) Object.assign(m, { mediaText: f.mediaText, mediaTextStatus: f.mediaTextStatus, mediaTextError: f.mediaTextError, mediaTextModel: f.mediaTextModel })
+    }
+  }
+
   // ── First pass ──
   let flaggedIds: string[]
   try {
@@ -187,7 +202,7 @@ export async function rescueMessage(messageId: string): Promise<string> {
     data: { bundleId: bundle.id, filterStatus: 'FLAGGED', filterReason: 'Rescued by the operator', rescuedAt: new Date() },
   })
   await prisma.feedback.create({
-    data: { chatId: m.chatId, messageId: m.id, kind: 'RESCUED', text: (m.text || `[${m.type.toLowerCase()}]`).slice(0, 500) },
+    data: { chatId: m.chatId, messageId: m.id, kind: 'RESCUED', text: (m.text || (m.mediaTextStatus === 'DONE' && m.mediaText) || `[${m.type.toLowerCase()}]`).slice(0, 500) },
   })
   await processBundle(bundle.id)
   return bundle.id

@@ -28,6 +28,14 @@ export interface Settings {
   allowSimulation: boolean
   /// Whether inbound images are sent to the analysis model.
   analyzeImages: boolean
+  /// Whether an image gets a written description (and any text read from
+  /// it) before the filter sees it. Uses the filter model.
+  describeImages: boolean
+  /// Whether voice notes are transcribed before the filter sees them.
+  transcribeVoice: boolean
+  /// The model that listens. Always an OpenRouter id: Claude takes no
+  /// audio, so this call goes through OpenRouter whatever the provider.
+  transcribeModel: string
 }
 
 export interface SecretSettings {
@@ -48,6 +56,9 @@ export const DEFAULTS: Settings = {
   contextMessages: 20,
   allowSimulation: false,
   analyzeImages: true,
+  describeImages: true,
+  transcribeVoice: true,
+  transcribeModel: 'google/gemini-3.8-flash',
 }
 
 export const LANGUAGE_NAMES: Record<OutputLanguage, string> = {
@@ -72,6 +83,7 @@ function coerce(raw: Partial<Settings> | null | undefined): Settings {
   if (!['anthropic', 'openrouter', 'mock'].includes(s.provider)) s.provider = 'anthropic'
   // The mock is a development tool. Production never runs it.
   if (s.provider === 'mock' && process.env.NODE_ENV === 'production') s.provider = 'anthropic'
+  if (!s.transcribeModel) s.transcribeModel = DEFAULTS.transcribeModel
   if (!s.filterModel) s.filterModel = DEFAULTS.filterModel
   if (!s.analyzeModel) s.analyzeModel = DEFAULTS.analyzeModel
   // A known model keeps working when the provider changes under it.
@@ -135,6 +147,13 @@ export function providerApiKey(): string {
   const p = settings().provider
   if (p === 'mock') return 'mock'
   return p === 'openrouter' ? secret('openrouterApiKey') : secret('anthropicApiKey')
+}
+
+/// Transcription is the one call that cannot use the Anthropic key.
+export function transcriptionConfigured(): boolean {
+  const p = settings().provider
+  if (p === 'mock') return true
+  return !!secret('openrouterApiKey')
 }
 
 export function mockAllowed(): boolean {

@@ -59,7 +59,7 @@ export async function runFilter(input: FilterInput): Promise<Map<string, FilterD
     maxTokens: 4096,
     bundleId: input.bundleId,
     mock: () => {
-      const r = mockFilter('', input.batch.map((m) => ({ id: msgIds.toShort.get(m.id)!, text: m.text, type: m.type })), input.rules.map((x) => ({ id: ruleIds.toShort.get(x.id)!, text: x.text })))
+      const r = mockFilter('', input.batch.map((m) => ({ id: msgIds.toShort.get(m.id)!, text: m.mediaTextStatus === 'DONE' && m.mediaText ? m.mediaText : m.text, type: m.mediaTextStatus === 'DONE' && m.mediaText ? 'TEXT' : m.type })), input.rules.map((x) => ({ id: ruleIds.toShort.get(x.id)!, text: x.text })))
       return r
     },
   })

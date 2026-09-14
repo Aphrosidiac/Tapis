@@ -3,6 +3,7 @@ import prisma from '../lib/prisma.js'
 import { authenticate } from '../middleware/auth.js'
 import { str, strOrNull, bool, int, strArray, waDigits, isUsableWaId } from '../lib/input.js'
 import { tick } from '../lib/pipeline/scheduler.js'
+import { rereadMedia } from '../lib/llm/media.js'
 
 const RULE_FIELDS = { id: true, chatId: true, text: true, extraAsk: true, senderWaIds: true, toDashboard: true, toWhatsapp: true, active: true, createdAt: true, updatedAt: true }
 
@@ -149,6 +150,14 @@ export default async function chatRoutes(app: FastifyInstance) {
     if (!existing) return reply.status(404).send({ error: 'Rule not found' })
     await prisma.rule.delete({ where: { id } })
     return { ok: true }
+  })
+
+  /// Transcribes or describes one message's media again — after a key was
+  /// added, a model changed, or a read failed.
+  app.post('/api/messages/:id/read-media', async (request) => {
+    const { id } = request.params as { id: string }
+    const message = await rereadMedia(id)
+    return { message }
   })
 
   /// Bundle whatever is waiting in this chat now, without waiting for quiet.

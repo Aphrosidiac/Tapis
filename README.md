@@ -210,6 +210,29 @@ A batch is cut for a chat when **any** of these is true:
 Plus `manual` (**Run now**) and `rescue` (one rescued message, straight to
 analysis).
 
+### Reading the media first
+
+Before a bundle is judged, every voice note in it is **transcribed** and every
+image is **described**, once, and the reading is stored on the message beside
+the untouched original (`mediaText`). Both passes then read words, not
+"[voice note]" — a screenshot of an error dialog or a spoken "tolong tambah
+button tu" counts on its own, where before it was flagged or dropped on its
+neighbours alone.
+
+- Voice notes: verbatim, in whatever mix of Malay, English and Chinese was
+  spoken, code-switching kept. The Anthropic API takes no audio, so this one
+  call always goes through **OpenRouter** (`transcribeModel`, default
+  Gemini 3.8 Flash — well under a cent for a 30-second note) and needs that
+  key whatever the provider setting says.
+- Images: a factual description plus any text read from the picture, in the
+  output language, written by the filter model. Independent of
+  `analyzeImages`, which sends the actual pixels to the analysis model as well.
+
+A read that fails is recorded on the message with its reason and never stops
+the bundle; the transcript line says what could not be read and why. Every
+reading is shown under the message on the item, chat and review screens with
+**Read again**, and both readings can be switched off on Settings.
+
 ### The two passes
 
 **Filter** — cheap model, one decision per message, plus a short reason and the
@@ -298,7 +321,8 @@ running a business can act on.
 Business name · output language (en/ms/zh) · timezone · provider (Anthropic,
 OpenRouter, or dev-only mock) · API keys · filter model · analysis model ·
 the four bundling numbers · whether images go to the analysis model · whether
-simulation is allowed in production.
+images are described and voice notes transcribed before judging, and with
+which model · whether simulation is allowed in production.
 
 **Keys are encrypted at rest** with AES-256-GCM and never sent back to the
 browser — the screen gets a boolean and a four-character tail. An empty field
@@ -431,8 +455,9 @@ output, review and rescue.
 
 ## What is deliberately not done
 
-- **Voice notes are stored and shown, not transcribed.** The transcript would
-  be a fourth language problem and a per-minute cost; text works first.
+- **Video is not watched.** A video arrives as its caption. Voice notes and
+  images are read (see the pipeline); video would cost real money per second
+  and has not yet been the report.
 - **Learning is few-shot, not fine-tuning.** Recent corrections per chat are
   shown to the filter as examples. Honest, cheap, and immediately reversible
   from the Review screen.

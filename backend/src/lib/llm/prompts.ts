@@ -50,15 +50,19 @@ export function senderLabel(m: Pick<Message, 'senderName' | 'senderWaId' | 'from
 /// content: an image with no caption is exactly that.
 export function messageBody(m: Message): string {
   const text = m.text?.trim()
+  const read = m.mediaTextStatus === 'DONE' ? m.mediaText?.trim() : ''
   switch (m.type) {
     case 'TEXT':
       return text || '(empty)'
-    case 'IMAGE':
-      return text ? `[image] ${text}` : '[image, no caption]'
+    case 'IMAGE': {
+      // The description is the system's reading; the caption is the sender's.
+      const seen = read ? `[image — ${read.replace(/\s*\n\s*/g, ' · ')}]` : mediaUnread(m, 'image')
+      return text ? `${seen} Caption: ${text}` : seen
+    }
     case 'VIDEO':
       return text ? `[video] ${text}` : '[video, no caption]'
     case 'AUDIO':
-      return '[voice note — not transcribed]'
+      return read ? `[voice note, transcribed] ${read}` : mediaUnread(m, 'voice note')
     case 'DOCUMENT':
       return text ? `[document] ${text}` : '[document]'
     case 'STICKER':
@@ -70,6 +74,13 @@ export function messageBody(m: Message): string {
     default:
       return text || '[unsupported message]'
   }
+}
+
+/// Why a piece of media has no reading, in words the model can act on.
+function mediaUnread(m: Message, what: string): string {
+  if (m.mediaTextStatus === 'FAILED') return `[${what} — could not be read: ${m.mediaTextError ?? 'unknown reason'}]`
+  if (m.mediaTextStatus === 'PENDING') return `[${what} — reading is switched off in Settings]`
+  return what === 'image' ? '[image, no caption]' : `[${what} — not read]`
 }
 
 export function transcriptLine(m: Message, short?: string): string {
@@ -133,7 +144,7 @@ How to judge:
 - Most messages are noise: greetings, "ok", "noted", "thanks", "boss", emoji, stickers, small talk, logistics like "call me". Dismiss those.
 - A message counts when it states, asks for, complains about, follows up on, or adds detail to something a rule covers. Short follow-ups count too: "dah siap ke?" or "any update?" after an earlier request is part of that request.
 - A message can be split across several short lines from the same sender within a minute. Judge each line, but let the neighbours inform it.
-- An image or document with no caption: flag it when the surrounding messages suggest it belongs to a tracked matter (a screenshot after "got error"). A voice note cannot be heard here; flag it only when its neighbours show it is part of a tracked matter.
+- Images arrive with a written description and any text read from them; voice notes arrive transcribed. Judge those words like any other message — a screenshot of an error dialog, or a voice note asking for a change, counts on its own. When one says it could not be read, or has no caption and no description, flag it only when the surrounding messages show it belongs to a tracked matter (a screenshot after "got error").
 - Messages from "Me (the business)" are context only. Never flag them.
 - Rules that name specific senders apply only to messages from those senders.
 - When unsure, FLAG. A missed client complaint costs far more than a false alarm. The second pass will double-check.
@@ -142,7 +153,7 @@ Return exactly one decision per new message id, with a short reason (a few words
 
 export const ANALYZE_SYSTEM = `You are the analyst for Tapis, a system that watches a business's WhatsApp chats and turns real client requests, complaints, bug reports and change requests into tracked items.
 
-You receive one chat's context, its tracking rules, the items already open for this chat, a set of flagged messages quoted exactly as sent (with the first-pass filter's reason), and the surrounding conversation.
+You receive one chat's context, its tracking rules, the items already open for this chat, a set of flagged messages quoted exactly as sent (with the first-pass filter's reason), and the surrounding conversation. A voice note appears as its transcript, verbatim in the language spoken; an image appears as a description with any text read from it, and may also be attached as a picture. Treat a transcript as the client's own words.
 
 Decide what to do with the flagged messages. Produce a list of actions:
 - "attach": the message is about an issue already in the open items list. Give the item id, the kind of attachment, and a one-line note (in the output language) saying what the message adds. The kinds:

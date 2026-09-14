@@ -34,6 +34,26 @@ A bundle is cut for a chat when any of these is true:
 Cutting is a transaction: the bundle row is created and the pending messages
 are stamped with its id together, so two ticks cannot claim the same message.
 
+## Reading the media
+
+`lib/llm/media.ts`, run on the batch before the filter. Every message whose
+`mediaTextStatus` is `PENDING` (set at ingest for JPEG/PNG/GIF/WebP images and
+any `audio/*`) is read once:
+
+| Kind | Call | Model | Stored |
+|---|---|---|---|
+| AUDIO | `callTranscribe` — OpenRouter `input_audio`, strict JSON `{transcript, language, unintelligible}` | `transcribeModel` (OpenRouter id; Claude takes no audio) | the transcript, verbatim in the language spoken |
+| IMAGE | `callParsed` kind `MEDIA` with the image attached, `{description, textInImage}` | the filter model | description, then `Text in the image: …` |
+
+The result lands in `mediaText` / `mediaTextStatus` / `mediaTextModel`; a
+failure lands in `mediaTextError` and the message stays in the bundle. The
+transcript line (`prompts.ts` `messageBody`) then reads
+`[voice note, transcribed] …` or `[image — …] Caption: …`, or says why it
+could not be read. Switching a reading off in Settings leaves the message
+`PENDING`, so switching it back on and pressing **Read again** picks it up.
+`POST /api/messages/:id/read-media` is that button. Calls are recorded in
+`llm_calls` as kind `MEDIA` and priced like the rest.
+
 ## First pass — the filter
 
 Cheap model. One decision per message: could this be part of something a rule
