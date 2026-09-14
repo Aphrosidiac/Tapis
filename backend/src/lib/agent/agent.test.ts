@@ -64,7 +64,7 @@ test('the assistant can message the operator and nobody else', async () => {
   const { assertOperatorNumber, isOperatorNumber } = await import('./guard.js')
   const op = '60100000000'
   assert.equal(assertOperatorNumber('+60 10-000 0000', op), op)
-  assert.equal(isOperatorNumber('60199899069', op), false)
-  assert.throws(() => assertOperatorNumber('60199899069', op), /only message the operator's own number/)
+  assert.equal(isOperatorNumber('60177000000', op), false)
+  assert.throws(() => assertOperatorNumber('60177000000', op), /only message the operator's own number/)
   assert.throws(() => assertOperatorNumber(op, ''), /no number it may message/)
 })
