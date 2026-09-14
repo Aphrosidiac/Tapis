@@ -130,7 +130,7 @@ opt-in in production) so a rule can be tested without a phone.
 | Backend | Fastify 5 + TypeScript (ESM), single process |
 | Database | PostgreSQL via Prisma 6 |
 | WhatsApp | [baileys](https://github.com/WhiskeySockets/Baileys) 6.7.24, linked device |
-| Models | Anthropic SDK (structured outputs) **or** OpenRouter; dev-only mock |
+| Models | Anthropic SDK (structured outputs) **or** OpenRouter (any model — DeepSeek V4 Flash filters by default, Claude Sonnet 5 analyses); dev-only mock |
 | Frontend | Vue 3 + Vite + Tailwind v4 + Pinia |
 | Type | Manrope (self-hosted), with a CJK fallback stack |
 | Process | PM2, **fork mode, one instance** |

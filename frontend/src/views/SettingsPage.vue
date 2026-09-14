@@ -72,10 +72,10 @@ onMounted(load)
 
 const modelOptions = computed(() => {
   const p = form.provider === 'openrouter' ? 'openrouter' : 'anthropic'
-  const opts = models.value.map((m) => ({ value: m[p], label: `${m.label} · $${m.in}/$${m.out} per M tokens` }))
+  const opts = models.value.filter((m) => m[p]).map((m) => ({ value: m[p], label: `${m.label} · $${m.in}/$${m.out} per M tokens` }))
   // The mock keeps whichever ids were last chosen, so offer both spellings.
   if (form.provider === 'mock')
-    for (const m of models.value) opts.push({ value: m[p === 'openrouter' ? 'anthropic' : 'openrouter'], label: `${m.label} · $${m.in}/$${m.out} per M tokens` })
+    for (const m of models.value) if (m[p === 'openrouter' ? 'anthropic' : 'openrouter']) opts.push({ value: m[p === 'openrouter' ? 'anthropic' : 'openrouter'], label: `${m.label} · $${m.in}/$${m.out} per M tokens` })
   for (const v of [form.filterModel, form.analyzeModel]) if (v && !opts.find((o) => o.value === v)) opts.push({ value: v, label: `${v} (custom)` })
   return opts
 })

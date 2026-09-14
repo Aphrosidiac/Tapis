@@ -151,7 +151,8 @@ async function viaOpenRouter<T>(opts: ParsedCallOptions<T>): Promise<{ data: T; 
     },
     // Providers that enforce the schema go first; a silent fall-through to
     // one that ignores response_format looks like a stupid model, not a bug.
-    provider: { order: ['Anthropic', 'Amazon Bedrock', 'Google Vertex'], allow_fallbacks: true },
+    // Only Claude models are hosted by these three; the rest route freely.
+    ...(opts.model.startsWith('anthropic/') ? { provider: { order: ['Anthropic', 'Amazon Bedrock', 'Google Vertex'], allow_fallbacks: true } } : {}),
     ...(opts.effort && supportsEffort(opts.model) ? { reasoning: { effort: opts.effort } } : {}),
   }
 

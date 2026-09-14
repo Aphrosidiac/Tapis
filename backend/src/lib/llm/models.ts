@@ -16,10 +16,12 @@ export interface ModelInfo {
 }
 
 export const MODELS: ModelInfo[] = [
-  { key: 'haiku-4.5', label: 'Claude Haiku 4.5 — cheapest, for the filter', anthropic: 'claude-haiku-4-5', openrouter: 'anthropic/claude-haiku-4.5', in: 1, out: 5, effort: false },
-  { key: 'sonnet-5', label: 'Claude Sonnet 5', anthropic: 'claude-sonnet-5', openrouter: 'anthropic/claude-sonnet-5', in: 2, out: 10, effort: true },
+  // OpenRouter only — no Anthropic id, so it is offered only on that provider.
+  { key: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash — recommended for the filter', anthropic: '', openrouter: 'deepseek/deepseek-v4-flash', in: 0.09, out: 0.18, effort: true },
+  { key: 'haiku-4.5', label: 'Claude Haiku 4.5', anthropic: 'claude-haiku-4-5', openrouter: 'anthropic/claude-haiku-4.5', in: 1, out: 5, effort: false },
+  { key: 'sonnet-5', label: 'Claude Sonnet 5 — recommended for analysis', anthropic: 'claude-sonnet-5', openrouter: 'anthropic/claude-sonnet-5', in: 2, out: 10, effort: true },
   { key: 'sonnet-4.6', label: 'Claude Sonnet 4.6', anthropic: 'claude-sonnet-4-6', openrouter: 'anthropic/claude-sonnet-4.6', in: 3, out: 15, effort: true },
-  { key: 'opus-5', label: 'Claude Opus 5 — recommended for analysis', anthropic: 'claude-opus-5', openrouter: 'anthropic/claude-opus-5', in: 5, out: 25, effort: true },
+  { key: 'opus-5', label: 'Claude Opus 5 — strongest analysis', anthropic: 'claude-opus-5', openrouter: 'anthropic/claude-opus-5', in: 5, out: 25, effort: true },
   { key: 'opus-4.8', label: 'Claude Opus 4.8', anthropic: 'claude-opus-4-8', openrouter: 'anthropic/claude-opus-4.8', in: 5, out: 25, effort: true },
   { key: 'fable-5.1', label: 'Claude Fable 5.1 — most capable, most expensive', anthropic: 'claude-fable-5-1', openrouter: 'anthropic/claude-fable-5.1', in: 10, out: 50, effort: true },
 ]
@@ -73,5 +75,7 @@ export function estimateCostUsd(model: string, inputTokens: number, outputTokens
 export function modelFor(id: string, provider: Provider): string {
   if (provider === 'mock') return id
   const m = modelInfo(id)
-  return m ? m[provider] : id
+  // A model with no id on this provider keeps its spelling; the call will
+  // say so plainly rather than silently landing on a different model.
+  return m && m[provider] ? m[provider] : id
 }
