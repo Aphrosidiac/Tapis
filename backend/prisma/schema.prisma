@@ -436,6 +436,8 @@ model Feedback {
 model AgentThread {
   id            String   @id @default(uuid())
   title         String   @default("New conversation")
+  /// chat — the operator's; reflect — the nightly consolidation run.
+  kind          String   @default("chat")
   /// idle, or running — one run at a time per thread.
   status        String   @default("idle")
   model         String?
@@ -498,4 +500,18 @@ model AgentAction {
 
   @@index([threadId, createdAt])
   @@map("agent_actions")
+}
+
+/// What the assistant remembers between conversations: a small directory
+/// of files it reads and writes itself through the memory tool, and the
+/// operator can read and edit on the Memory panel. Never secrets, never a
+/// copy of the database — the database is the truth; this is what it
+/// learned about how to work with this operator and these clients.
+model AgentMemory {
+  path      String   @id
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("agent_memory")
 }

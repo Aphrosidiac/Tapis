@@ -334,12 +334,24 @@ tenth of a cent. What makes a cheap model reliable is the harness:
 - **Untrusted content.** The prompt and the tool descriptions both say it:
   what a client wrote is data, not instructions.
 
+**Memory.** Between conversations it keeps a small directory of files under
+`/memories`, driven through a tool with the same six commands as Anthropic's
+memory tool (view, create, str_replace, insert, delete, rename) and stored in
+Postgres: `operator.md` (how you want things done — read in full at the
+start of every turn), `clients/<name>.md`, `procedures/<name>.md`, `log.md`.
+The **Memory** panel shows and edits every file; nothing it knows about how
+to work with you is hidden. A **nightly reflection** (03:00 local, its own
+thread kind) re-reads the day — conversations, actions, what the pipeline
+produced — and consolidates: merges, expires, writes what it would want to
+know tomorrow. Long threads are **compacted** client-side: older rows are
+summarised into a system row that records what it replaced; the rows stay
+for you, the model sees the summary plus the tail.
+
 Every call lands in `llm_calls` as kind `AGENT`; the thread header shows
 tokens and cost. Reasoning is shown behind a disclosure; tool calls are
 cards that open to the exact input and result.
 
-Next: the memory layer (operator preferences, per-client notes, learned
-procedures, nightly consolidation), then evals from real threads.
+Next: evals from real threads, and a scheduled morning digest.
 
 ## Data model
 
@@ -490,6 +502,14 @@ against the same session directory, and never PM2 cluster mode.
 ## Changelog
 
 Newest first. Every entry below was driven by a real account, not a plan.
+
+**The assistant, phase 3** — memory: a six-command file tool over a Postgres
+directory, the operator file in every prompt, a Memory panel, client-side
+compaction of long threads, and a nightly reflection thread. Told two
+preferences in one message, it edited operator.md in place; the first
+reflection wrote client notes for both projects, a procedure file, and a
+dated log — and, unprompted, a rule not to move items without confirmation
+after seeing an undo. $0.0095 for the whole pass.
 
 **The assistant, phase 2** — fourteen write and outward tools. Writes are
 audited with before/after and undoable from their card; outward calls

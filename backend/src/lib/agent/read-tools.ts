@@ -392,7 +392,9 @@ const SCHEMA: Record<string, string> = {
   feedback: 'id, chat_id, message_id, kind (RESCUED|FALSE_POSITIVE), text, created_at',
   llm_calls: 'id, kind, model, bundle_id, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, latency_ms, ok, error, created_at',
   agent_threads: 'id, title, status, model, input_tokens, output_tokens, cost_usd, turns, last_message_at, created_at',
-  agent_actions: 'id, thread_id, tool, tier, input, output, before, after, ok, error, latency_ms, undone_at, created_at',
+  agent_actions: 'id, thread_id, call_id, tool, tier, status (done|pending|declined|undone|failed), summary, input, output, before, after, ok, error, latency_ms, undone_at, created_at',
+  agent_messages: 'id, thread_id, seq, role (user|assistant|tool|system), content (json: text / toolCalls / toolResults), created_at',
+  agent_memory: 'path, content, created_at, updated_at',
 }
 
 defineTool({

@@ -4,6 +4,8 @@ import { authenticate } from '../middleware/auth.js'
 import { str, int } from '../lib/input.js'
 import { startTurn, subscribe, stopRun, activeRun, approveAction, declineAction, undoAction, actionView, type AgentEvent } from '../lib/agent/run.js'
 import { allTools } from '../lib/agent/tools.js'
+import { listMemory, readMemory, writeMemory, deleteMemory } from '../lib/agent/memory.js'
+import { runReflection } from '../lib/agent/reflect.js'
 import { settings } from '../lib/settings.js'
 
 /// The assistant's API: threads, turns, and a stream of what a turn is
@@ -15,7 +17,7 @@ export default async function agentRoutes(app: FastifyInstance) {
 
   app.get('/api/agent/threads', async (request) => {
     const q = request.query as Record<string, string>
-    const threads = await prisma.agentThread.findMany({ orderBy: { lastMessageAt: 'desc' }, take: int(q.limit, 50, 1, 200) })
+    const threads = await prisma.agentThread.findMany({ where: q.kind ? { kind: q.kind } : {}, orderBy: { lastMessageAt: 'desc' }, take: int(q.limit, 50, 1, 200) })
     return { threads: threads.map((t) => ({ ...t, running: !!activeRun(t.id) })) }
   })
 
@@ -111,6 +113,37 @@ export default async function agentRoutes(app: FastifyInstance) {
   app.post('/api/agent/actions/:id/approve', act(async (id) => ({ action: await approveAction(id) })))
   app.post('/api/agent/actions/:id/decline', act(async (id, body) => ({ action: await declineAction(id, str(body.reason) || undefined) })))
   app.post('/api/agent/actions/:id/undo', act(async (id) => undoAction(id)))
+
+  // ── Memory ──
+  app.get('/api/agent/memory', async () => ({ files: (await listMemory()).map((f) => ({ ...f, updatedAt: f.updatedAt.toISOString() })) }))
+  app.get('/api/agent/memory/*', async (request, reply) => {
+    const path = decodeURIComponent((request.params as { '*': string })['*'])
+    const content = await readMemory(path)
+    if (content === null) return reply.status(404).send({ error: 'No such memory file' })
+    return { path, content }
+  })
+  app.put('/api/agent/memory/*', async (request, reply) => {
+    const path = decodeURIComponent((request.params as { '*': string })['*'])
+    const content = (request.body as Record<string, unknown> | undefined)?.content
+    if (typeof content !== 'string') return reply.status(400).send({ error: 'Send { content }' })
+    try {
+      await writeMemory(path, content)
+    } catch (err) {
+      return reply.status(400).send({ error: err instanceof Error ? err.message : String(err) })
+    }
+    return { path, content }
+  })
+  app.delete('/api/agent/memory/*', async (request, reply) => {
+    const path = decodeURIComponent((request.params as { '*': string })['*'])
+    if (!(await deleteMemory(path))) return reply.status(404).send({ error: 'No such memory file' })
+    return { ok: true }
+  })
+
+  /// Runs tonight's reflection now.
+  app.post('/api/agent/reflect', async () => {
+    const day = new Date().toISOString().slice(0, 10)
+    return { threadId: await runReflection(day) }
+  })
 
   app.get('/api/agent/tools', async () => ({ tools: allTools().map((t) => ({ name: t.name, tier: t.tier, description: t.description })) }))
 }

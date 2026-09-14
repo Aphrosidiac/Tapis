@@ -49,6 +49,7 @@ export default async function settingsRoutes(app: FastifyInstance) {
     if (body.translateOriginals !== undefined) patch.translateOriginals = bool(body.translateOriginals, cur.translateOriginals)
     if (body.agentModel !== undefined) patch.agentModel = str(body.agentModel).slice(0, 100) || cur.agentModel
     if (body.agentEscalationModel !== undefined) patch.agentEscalationModel = str(body.agentEscalationModel).slice(0, 100) || cur.agentEscalationModel
+    if (body.agentReflect !== undefined) patch.agentReflect = bool(body.agentReflect, cur.agentReflect)
     if (body.agentEffort !== undefined) {
       const e = str(body.agentEffort)
       if (!['low', 'medium', 'high'].includes(e)) return reply.status(400).send({ error: 'Effort is low, medium or high' })

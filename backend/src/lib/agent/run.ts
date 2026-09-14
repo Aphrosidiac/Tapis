@@ -7,6 +7,8 @@ import { allTools, getTool, wireTools, isAudited, type AgentTool } from './tools
 import { staticSystemPrompt, liveBrief } from './prompt.js'
 import './read-tools.js'
 import './write-tools.js'
+import './memory.js'
+import { memoryContext } from './memory.js'
 
 /// The loop. One turn = the operator says something; the model reasons,
 /// calls tools, reads results, and answers — every step persisted as it
@@ -62,6 +64,7 @@ export type MessageContent =
   | { text: string }
   | { text?: string; reasoning?: string; toolCalls: { id: string; name: string; input: unknown; raw?: string }[]; reasoningDetails?: unknown[] }
   | { toolResults: { id: string; name: string; output: unknown; isError: boolean; ms: number }[] }
+  | { summary: string; replaces: [number, number] }
 
 interface Run {
   threadId: string
@@ -168,11 +171,13 @@ async function runTurn(run: Run) {
   const s = settings()
   const tools = allTools()
   const wire = wireTools(tools)
+  await compactIfNeeded(run.threadId)
   const history = await prisma.agentMessage.findMany({ where: { threadId: run.threadId }, orderBy: { seq: 'asc' } })
   const messages: WireMessage[] = [
     { role: 'system', content: staticSystemPrompt() },
+    { role: 'system', content: await memoryContext() },
     { role: 'system', content: await liveBrief() },
-    ...toWire(history.map((m) => m.content as MessageContent), history.map((m) => m.role)),
+    ...toWire(history.map((m) => ({ seq: m.seq, role: m.role, content: m.content as MessageContent }))),
   ]
 
   let model = s.agentModel
@@ -432,10 +437,20 @@ function preview(output: unknown): string {
 
 /// The stored transcript, in the wire shape. Tool results are re-serialised
 /// exactly as they were given, so what the model saw is what it sees again.
-function toWire(contents: MessageContent[], roles: string[]): WireMessage[] {
+/// A compaction row stands in for the range it replaced: those rows stay in
+/// the table for the operator, and leave the model's view.
+export function toWire(rows: { seq: number; role: string; content: MessageContent }[]): WireMessage[] {
   const out: WireMessage[] = []
-  contents.forEach((c, i) => {
-    const role = roles[i]
+  const hidden = new Set<number>()
+  for (const r of rows) {
+    if (r.role === 'system' && 'replaces' in r.content) for (let s = r.content.replaces[0]; s <= r.content.replaces[1]; s++) hidden.add(s)
+  }
+  rows.forEach(({ seq, role, content: c }) => {
+    if (hidden.has(seq)) return
+    if (role === 'system' && 'replaces' in c) {
+      out.push({ role: 'system', content: `Earlier in this conversation (summarised, the details are no longer shown):\n${c.summary}` })
+      return
+    }
     if (role === 'user') out.push({ role: 'user', content: (c as { text: string }).text })
     else if (role === 'assistant') {
       const a = c as Extract<MessageContent, { toolCalls: unknown }> & { text?: string }
@@ -450,6 +465,49 @@ function toWire(contents: MessageContent[], roles: string[]): WireMessage[] {
     } else if (role === 'system') out.push({ role: 'system', content: (c as { text: string }).text })
   })
   return out
+}
+
+const COMPACT_AT_CHARS = 120_000
+const COMPACT_KEEP = 10
+
+/// Client-side compaction. When the stored transcript outgrows the budget,
+/// everything but the last few rows is summarised by the model into a
+/// single system row that records what it replaced. Rows are never deleted:
+/// the operator still sees the whole conversation; the model sees the
+/// summary plus the tail.
+async function compactIfNeeded(threadId: string): Promise<void> {
+  const rows = await prisma.agentMessage.findMany({ where: { threadId }, orderBy: { seq: 'asc' } })
+  const visible = toWire(rows.map((m) => ({ seq: m.seq, role: m.role, content: m.content as MessageContent })))
+  const size = visible.reduce((n, m) => n + (m.content?.length ?? 0), 0)
+  if (size < COMPACT_AT_CHARS || rows.length <= COMPACT_KEEP + 2) return
+
+  const lastSummary = [...rows].reverse().find((r) => r.role === 'system' && 'replaces' in (r.content as object))
+  const from = lastSummary ? (lastSummary.content as { replaces: [number, number] }).replaces[1] + 1 : rows[0].seq
+  const to = rows[rows.length - 1 - COMPACT_KEEP].seq
+  if (to <= from) return
+  const range = rows.filter((r) => r.seq >= from && r.seq <= to)
+  const transcript = toWire(range.map((m) => ({ seq: m.seq, role: m.role, content: m.content as MessageContent })))
+    .map((m) => `${m.role.toUpperCase()}: ${(m.content ?? (m.tool_calls ? `called ${m.tool_calls.map((t) => t.function.name).join(', ')}` : '')).slice(0, 4000)}`)
+    .join('\n\n')
+  const s = settings()
+  try {
+    const out = await streamCompletion({
+      model: s.agentModel,
+      tools: [],
+      effort: 'low',
+      maxTokens: 3000,
+      messages: [
+        { role: 'system', content: 'You summarise a conversation between an operator and an assistant so the assistant can continue it later. Keep every fact, id, number, decision, open question and instruction the operator gave. Drop pleasantries and the detail of tool outputs already acted on. Write plainly, in the past tense, under 600 words.' },
+        { role: 'user', content: transcript },
+      ],
+    })
+    const previous = lastSummary ? `${(lastSummary.content as { summary: string }).summary}\n\n` : ''
+    await append(threadId, 'system', { summary: `${previous}${out.text.trim()}`.slice(0, 12_000), replaces: [lastSummary ? (lastSummary.content as { replaces: [number, number] }).replaces[0] : from, to] })
+    if (lastSummary) await prisma.agentMessage.update({ where: { id: lastSummary.id }, data: { content: { summary: '(superseded)', replaces: [0, 0] } } })
+    logLine(`compacted thread ${threadId.slice(0, 8)}: rows ${from}–${to}`)
+  } catch (err) {
+    logLine(`compaction failed for thread ${threadId.slice(0, 8)}; continuing uncompacted`, err)
+  }
 }
 
 /// Old tool results are the bulk of a long thread and the least useful

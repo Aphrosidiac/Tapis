@@ -23,6 +23,7 @@ import devRoutes from './modules/dev.routes.js'
 import teamRoutes from './modules/team.routes.js'
 import agentRoutes from './modules/agent.routes.js'
 import { setAgentLogger } from './lib/agent/run.js'
+import { setReflectLogger } from './lib/agent/reflect.js'
 
 export interface BuildOptions {
   /// Connect the WhatsApp link and run the pipeline. Only the one serving
@@ -60,6 +61,7 @@ export async function buildApp(opts: BuildOptions = {}) {
   setBaileysLogger(log)
   setIngestLogger(log)
   setAgentLogger(log)
+  setReflectLogger(log)
 
   app.get('/api/health', async () => ({ ok: true }))
   await app.register(authRoutes)

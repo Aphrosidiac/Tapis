@@ -45,6 +45,8 @@ export interface Settings {
   agentModel: string
   agentEscalationModel: string
   agentEffort: 'low' | 'medium' | 'high'
+  /// The nightly memory consolidation run.
+  agentReflect: boolean
 }
 
 export interface SecretSettings {
@@ -72,6 +74,7 @@ export const DEFAULTS: Settings = {
   agentModel: 'deepseek/deepseek-v4-flash',
   agentEscalationModel: 'deepseek/deepseek-v4-pro',
   agentEffort: 'medium',
+  agentReflect: true,
 }
 
 export const LANGUAGE_NAMES: Record<OutputLanguage, string> = {

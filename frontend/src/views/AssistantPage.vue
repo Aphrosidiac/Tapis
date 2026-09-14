@@ -1,20 +1,21 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Plus, Square, SendHorizontal, Trash2, ChevronDown, ChevronRight, Loader2, Wrench, MessagesSquare, X, ShieldAlert, Undo2, Check } from 'lucide-vue-next'
+import { Plus, Square, SendHorizontal, Trash2, ChevronDown, ChevronRight, Loader2, Wrench, MessagesSquare, X, ShieldAlert, Undo2, Check, Brain, MoonStar } from 'lucide-vue-next'
 import { api, errorMessage } from '../lib/api'
 import { useToast } from '../composables/useToast'
 import { streamAgentEvents, type AgentEvent } from '../lib/agentStream'
 import { renderMarkdown } from '../lib/markdown'
 import { ago } from '../lib/format'
 import BaseButton from '../components/base/BaseButton.vue'
+import MemoryPanel from '../components/MemoryPanel.vue'
 
 /// The assistant. A thread list and a transcript that streams: text as it
 /// is written, each tool call as a card that fills in when the result
 /// lands, reasoning behind a disclosure. Everything shown is what the
 /// server stored — a reload shows the same conversation.
 
-interface Thread { id: string; title: string; status: string; running: boolean; model: string | null; costUsd: number; inputTokens: number; outputTokens: number; turns: number; lastMessageAt: string }
+interface Thread { id: string; title: string; kind?: string; status: string; running: boolean; model: string | null; costUsd: number; inputTokens: number; outputTokens: number; turns: number; lastMessageAt: string }
 interface ToolCall { id: string; name: string; input: unknown }
 interface ToolResult { id: string; name: string; output: unknown; isError: boolean; ms: number }
 interface Msg { id: string; seq: number; role: string; content: { text?: string; reasoning?: string; toolCalls?: ToolCall[]; toolResults?: ToolResult[] }; createdAt: string }
@@ -32,6 +33,7 @@ const acting = ref('')
 const draft = ref('')
 const running = ref(false)
 const listOpen = ref(false)
+const memoryOpen = ref(false)
 const expanded = ref<Set<string>>(new Set())
 const scroller = ref<HTMLElement | null>(null)
 const composer = ref<HTMLTextAreaElement | null>(null)
@@ -295,7 +297,10 @@ onBeforeUnmount(() => stop?.())
           @click="listOpen = false"
         >
           <div class="min-w-0 flex-1">
-            <p class="truncate text-[14px] leading-5" :class="t.id === threadId ? 'font-medium text-ink-900' : 'text-ink-800'">{{ t.title }}</p>
+            <p class="flex items-center gap-1.5 truncate text-[14px] leading-5" :class="t.id === threadId ? 'font-medium text-ink-900' : 'text-ink-800'">
+              <MoonStar v-if="t.kind === 'reflect'" class="size-3.5 shrink-0 text-ink-400" :stroke-width="1.5" aria-label="Nightly reflection" />
+              <span class="truncate">{{ t.title }}</span>
+            </p>
             <p class="text-[12px] leading-4 text-ink-500">
               <Loader2 v-if="t.running" class="inline size-3 animate-spin" :stroke-width="2" />
               {{ ago(t.lastMessageAt) }} · {{ money(t.costUsd) }}
@@ -318,6 +323,7 @@ onBeforeUnmount(() => stop?.())
           </p>
         </div>
         <BaseButton v-if="running" size="sm" variant="secondary" @click="stopTurn"><Square class="size-3.5" :stroke-width="2" /> Stop</BaseButton>
+        <BaseButton size="sm" variant="secondary" :aria-pressed="memoryOpen" @click="memoryOpen = !memoryOpen"><Brain class="size-4" :stroke-width="1.75" /> Memory</BaseButton>
       </div>
 
       <div ref="scroller" class="min-h-0 flex-1 overflow-y-auto px-4 py-6 lg:px-6">
@@ -424,5 +430,13 @@ onBeforeUnmount(() => stop?.())
         <p class="mx-auto mt-1.5 max-w-3xl text-[12px] leading-4 text-ink-500">Enter to send, Shift+Enter for a new line. Changes are recorded and can be undone from their card; anything that leaves the box waits for your approval.</p>
       </div>
     </section>
+
+    <!-- Memory -->
+    <aside
+      v-if="memoryOpen"
+      class="absolute inset-y-0 right-0 z-20 w-full max-w-md border-l border-line-200 bg-surface-0 shadow-lg lg:static lg:w-96 lg:shadow-none"
+    >
+      <MemoryPanel @close="memoryOpen = false" />
+    </aside>
   </div>
 </template>

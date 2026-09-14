@@ -175,4 +175,7 @@ login by doing so.
 | POST | `/agent/actions/:id/approve` | run a parked outward call; the thread resumes → `{ action }` |
 | POST | `/agent/actions/:id/decline` | `{ reason? }`; the thread resumes |
 | POST | `/agent/actions/:id/undo` | reverse a done write from its audit record → `{ action, note }` |
+| GET | `/agent/memory` | the memory files with sizes |
+| GET/PUT/DELETE | `/agent/memory/<path>` | one file; PUT takes `{ content }` |
+| POST | `/agent/reflect` | run tonight's reflection now → `{ threadId }` |
 | GET | `/agent/tools` | the tools, with tier and description |
