@@ -26,7 +26,7 @@ export interface ImageInput {
 }
 
 export interface ParsedCallOptions<T> {
-  kind: 'FILTER' | 'ANALYZE' | 'MEDIA'
+  kind: 'FILTER' | 'ANALYZE' | 'MEDIA' | 'TRANSLATE'
   /// What the mock provider answers with, when it is the provider.
   mock?: () => unknown
   model: string

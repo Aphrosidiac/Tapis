@@ -63,6 +63,7 @@ interesting part.
 | PUT | `/chats/:id` | `{ tracked?, clientName?, description?, name? }` |
 | GET | `/chats/:id/messages` | `?status=&q=&page=&limit=` |
 | POST | `/messages/:id/read-media` | transcribe / describe the message's media again → `{ message }` |
+| POST | `/messages/:id/translate` | render the message's Chinese text / reading into the output language again → `{ message }` |
 | GET | `/team` | every sender seen across chats, with `team` flags → `{ people, count }` |
 | PUT | `/team/:waId` | `{ team: boolean, name? }` — marks a sender as the business's own; pending messages from them become context |
 | POST | `/chats/:id/run` | bundle and process now |

@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { RefreshCw } from 'lucide-vue-next'
 import { api, errorMessage } from '../lib/api'
 import { useToast } from '../composables/useToast'
+import TranslationLine from './TranslationLine.vue'
 
 /// What a model read out of a message's media — a voice note's transcript
 /// or an image's description — shown under the untouched original, with
@@ -16,6 +17,9 @@ export interface MediaTextMessage {
   mediaTextStatus?: string
   mediaTextError?: string | null
   mediaTextModel?: string | null
+  text?: string | null
+  textTranslation?: string | null
+  mediaTextTranslation?: string | null
 }
 
 const props = defineProps<{ message: MediaTextMessage }>()
@@ -51,6 +55,7 @@ async function reread() {
           </button>
         </p>
         <p class="mt-1 whitespace-pre-wrap text-[14px] leading-5 text-ink-800">{{ message.mediaText }}</p>
+        <TranslationLine :message="message" field="reading" @updated="(u) => emit('updated', { ...message, ...u })" />
       </div>
     </template>
     <p v-else class="flex flex-wrap items-center gap-x-2 text-[13px] leading-[18px]" :class="message.mediaTextStatus === 'FAILED' ? 'text-danger-600' : 'text-ink-500'">

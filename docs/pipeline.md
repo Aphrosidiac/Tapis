@@ -63,6 +63,16 @@ team member's words are context and commitments, never requests. The chat
 description remains the place to say anything subtler ("Sharon is the
 client's accountant").
 
+## Translating for the reader
+
+`lib/llm/translate.ts`, after the media step. Every message in the batch
+whose text or reading contains CJK gets a rendering into the output language
+(unless that is `zh`), in one `TRANSLATE` call to the filter model, stored
+as `textTranslation` / `mediaTextTranslation` with `translationLang`. The
+models never see these; the operator does, under the original. A result
+that is empty, the original handed back, or still mostly Chinese is dropped
+rather than shown. `POST /api/messages/:id/translate` redoes one.
+
 ## First pass — the filter
 
 Cheap model. One decision per message: could this be part of something a rule

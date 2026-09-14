@@ -6,6 +6,7 @@ import { useToast } from '../composables/useToast'
 import { usePolling } from '../composables/usePolling'
 import { fmtDateTime, senderOf, bodyOf, FILTER_LABEL, FILTER_TONE } from '../lib/format'
 import MediaText from '../components/MediaText.vue'
+import TranslationLine from '../components/TranslationLine.vue'
 import PageHeader from '../components/base/PageHeader.vue'
 import Card from '../components/base/Card.vue'
 import BaseInput from '../components/base/BaseInput.vue'
@@ -50,6 +51,8 @@ interface Msg {
   mediaTextStatus?: string
   mediaTextError?: string | null
   mediaTextModel?: string | null
+  textTranslation?: string | null
+  mediaTextTranslation?: string | null
   itemLinks: { itemId: string; kind: string; item: { title: string; status: string } }[]
 }
 
@@ -349,6 +352,7 @@ async function toggleTeam(p: Participant) {
               </button>
             </div>
             <p class="original mt-1 text-[15px] leading-[22px] text-ink-800">{{ bodyOf(m) }}</p>
+            <TranslationLine :message="m" field="text" @updated="(u) => Object.assign(m, u)" />
             <MediaText :message="m" @updated="(u) => Object.assign(m, u)" />
             <p v-if="m.filterReason && m.filterStatus !== 'ATTACHED'" class="text-[13px] leading-[18px] text-ink-500 italic">{{ m.filterReason }}</p>
             <p v-for="l in m.itemLinks" :key="l.itemId" class="text-[13px] leading-[18px]">

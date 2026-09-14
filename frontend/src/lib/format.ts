@@ -58,3 +58,9 @@ export function bodyOf(m: { type: string; text?: string | null }): string {
     default: return t || 'Unsupported message'
   }
 }
+
+/// Chinese, Japanese or Korean script — the scripts the operator may not
+/// read, and the trigger for a translation line under the original.
+export function hasCjk(s: string): boolean {
+  return /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\u3000-\u303f\uff00-\uffef]/.test(s)
+}

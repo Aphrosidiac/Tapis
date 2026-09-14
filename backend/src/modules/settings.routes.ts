@@ -46,6 +46,7 @@ export default async function settingsRoutes(app: FastifyInstance) {
     if (body.analyzeImages !== undefined) patch.analyzeImages = bool(body.analyzeImages, cur.analyzeImages)
     if (body.describeImages !== undefined) patch.describeImages = bool(body.describeImages, cur.describeImages)
     if (body.transcribeVoice !== undefined) patch.transcribeVoice = bool(body.transcribeVoice, cur.transcribeVoice)
+    if (body.translateOriginals !== undefined) patch.translateOriginals = bool(body.translateOriginals, cur.translateOriginals)
     if (body.transcribeModel !== undefined) patch.transcribeModel = str(body.transcribeModel).slice(0, 100) || cur.transcribeModel
     await saveSettings(patch)
     return { settings: publicSettings() }

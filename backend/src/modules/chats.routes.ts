@@ -5,6 +5,7 @@ import { str, strOrNull, bool, int, strArray, waDigits, isUsableWaId } from '../
 import { tick } from '../lib/pipeline/scheduler.js'
 import { rereadMedia } from '../lib/llm/media.js'
 import { isTeam } from '../lib/team.js'
+import { translateOne } from '../lib/llm/translate.js'
 
 const RULE_FIELDS = { id: true, chatId: true, text: true, extraAsk: true, senderWaIds: true, toDashboard: true, toWhatsapp: true, active: true, createdAt: true, updatedAt: true }
 
@@ -164,6 +165,14 @@ export default async function chatRoutes(app: FastifyInstance) {
   app.post('/api/messages/:id/read-media', async (request) => {
     const { id } = request.params as { id: string }
     const message = await rereadMedia(id)
+    return { message }
+  })
+
+  /// Renders one message's original (and reading) into the output language
+  /// again — after the language setting changed, or when one was missed.
+  app.post('/api/messages/:id/translate', async (request) => {
+    const { id } = request.params as { id: string }
+    const message = await translateOne(id)
     return { message }
   })
 

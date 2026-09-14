@@ -36,6 +36,9 @@ export interface Settings {
   /// The model that listens. Always an OpenRouter id: Claude takes no
   /// audio, so this call goes through OpenRouter whatever the provider.
   transcribeModel: string
+  /// Whether originals in a script the operator may not read (Chinese) get
+  /// a translation into the output language, shown beside them.
+  translateOriginals: boolean
 }
 
 export interface SecretSettings {
@@ -59,6 +62,7 @@ export const DEFAULTS: Settings = {
   describeImages: true,
   transcribeVoice: true,
   transcribeModel: 'google/gemini-3.8-flash',
+  translateOriginals: true,
 }
 
 export const LANGUAGE_NAMES: Record<OutputLanguage, string> = {

@@ -189,6 +189,13 @@ model Message {
   mediaTextStatus MediaTextStatus @default(NONE) @map("media_text_status")
   mediaTextError  String?         @map("media_text_error")
   mediaTextModel  String?         @map("media_text_model")
+  /// Translations into the operator's output language, shown under the
+  /// original for text the operator cannot read (Chinese, today). The
+  /// original is never replaced; these sit beside it. `translationLang` is
+  /// the language they were made in, so a changed setting re-translates.
+  textTranslation      String? @map("text_translation")
+  mediaTextTranslation String? @map("media_text_translation")
+  translationLang      String? @map("translation_lang")
   quotedWaMessageId String? @map("quoted_wa_message_id")
   sentAt       DateTime     @map("sent_at")
   receivedAt   DateTime     @default(now()) @map("received_at")
@@ -247,7 +254,8 @@ model Bundle {
 enum LlmKind {
   FILTER
   ANALYZE
-  MEDIA    // a transcript or an image description
+  MEDIA     // a transcript or an image description
+  TRANSLATE // originals rendered into the output language, for the reader
 }
 
 /// Every model call, so the cost of the pipeline is a number on a screen and

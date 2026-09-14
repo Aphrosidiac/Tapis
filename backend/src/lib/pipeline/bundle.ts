@@ -4,6 +4,7 @@ import { llmConfigured } from '../llm/client.js'
 import { runFilter } from '../llm/filter.js'
 import { runAnalysis } from '../llm/analyze.js'
 import { understandMedia } from '../llm/media.js'
+import { translateBatch } from '../llm/translate.js'
 import { applyActions } from './items.js'
 
 /// Bundling and the two passes.
@@ -124,6 +125,11 @@ export async function processBundle(bundleId: string): Promise<void> {
       if (f) Object.assign(m, { mediaText: f.mediaText, mediaTextStatus: f.mediaTextStatus, mediaTextError: f.mediaTextError, mediaTextModel: f.mediaTextModel })
     }
   }
+
+  // For the reader, not the models: Chinese originals get a rendering in
+  // the output language beside them. Cheap, one call, never blocking.
+  const translated = await translateBatch(chat, batch)
+  if (translated) logLine(`bundle ${bundleId.slice(0, 8)}: translated ${translated} message(s)`)
 
   // ── First pass ──
   let flaggedIds: string[]

@@ -243,6 +243,14 @@ neighbours alone.
   output language, written by the filter model. Independent of
   `analyzeImages`, which sends the actual pixels to the analysis model as well.
 
+Anything with Chinese in it — the message, a transcript, an image reading —
+also gets a translation into the output language, stored beside the original
+and shown under it (`textTranslation`, `mediaTextTranslation`). One cheap
+call per bundle by the filter model, for the reader only; the models read
+the original. **Translate** appears on any Chinese line that has none. The
+field is deliberately not called a "reading": asked for a *reading* of
+Chinese, the model returned pinyin.
+
 A read that fails is recorded on the message with its reason and never stops
 the bundle; the transcript line says what could not be read and why. Every
 reading is shown under the message on the item, chat and review screens with

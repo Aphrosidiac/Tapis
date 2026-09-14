@@ -4,6 +4,7 @@ import { useRoute, RouterLink } from 'vue-router'
 import { api, errorMessage } from '../lib/api'
 import MediaSrc from '../components/MediaSrc.vue'
 import MediaText, { type MediaTextMessage } from '../components/MediaText.vue'
+import TranslationLine from '../components/TranslationLine.vue'
 import { useToast } from '../composables/useToast'
 import { fmtDateTime, ago, senderOf, bodyOf, STATUS_LABEL, STATUS_TONE, PRIORITY_TONE } from '../lib/format'
 import Card from '../components/base/Card.vue'
@@ -27,6 +28,8 @@ interface Msg {
   mediaTextStatus?: string
   mediaTextError?: string | null
   mediaTextModel?: string | null
+  textTranslation?: string | null
+  mediaTextTranslation?: string | null
   mediaMime: string | null
   sentAt: string
   filterReason: string | null
@@ -97,8 +100,9 @@ async function send() {
 
 const KIND: Record<string, string> = { ORIGIN: 'Original', DETAIL: 'More detail', STATUS_CHECK: 'Status check', FOLLOW_UP: 'Follow-up' }
 const KIND_TONE: Record<string, 'accent' | 'info' | 'warn' | 'neutral'> = { ORIGIN: 'accent', DETAIL: 'info', STATUS_CHECK: 'warn', FOLLOW_UP: 'neutral' }
-function patchMessage(target: { id: string } & Record<string, unknown>, u: MediaTextMessage) {
-  Object.assign(target, { mediaText: u.mediaText, mediaTextStatus: u.mediaTextStatus, mediaTextError: u.mediaTextError, mediaTextModel: u.mediaTextModel })
+function patchMessage(target: { id: string } & Record<string, unknown>, u: Partial<MediaTextMessage>) {
+  const { id: _id, ...rest } = u
+  Object.assign(target, rest)
 }
 </script>
 
@@ -151,6 +155,7 @@ function patchMessage(target: { id: string } & Record<string, unknown>, u: Media
                 <BaseBadge :tone="KIND_TONE[m.link.kind]">{{ KIND[m.link.kind] }}</BaseBadge>
               </div>
               <p class="original mt-1.5 text-[15px] leading-[22px] text-ink-800">{{ bodyOf(m) }}</p>
+              <TranslationLine :message="m" field="text" @updated="(u) => patchMessage(m, u)" />
               <MediaSrc v-if="m.type === 'IMAGE' && m.mediaPath" v-slot="{ src }" :message-id="m.id">
                 <img :src="src" alt="" class="mt-3 max-h-80 rounded-md border border-line-200" />
               </MediaSrc>

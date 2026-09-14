@@ -31,6 +31,7 @@ interface Settings {
   describeImages: boolean
   transcribeVoice: boolean
   transcribeModel: string
+  translateOriginals: boolean
   keys: { anthropic: KeyView; openrouter: KeyView }
   simulationAllowed: boolean
   mockAllowed: boolean
@@ -229,6 +230,13 @@ const PROVIDERS = computed(() => [
               :hint="s?.keys.openrouter.configured ? 'Always called through OpenRouter.' : 'No OpenRouter key yet — add one above or voice notes stay untranscribed.'"
             />
           </div>
+          <label class="flex items-start gap-3 py-2">
+            <BaseToggle v-model="form.translateOriginals!" label="Translate Chinese originals" />
+            <span class="text-[14px] leading-5">
+              <span class="font-medium text-ink-900">Show Chinese messages, transcripts and readings with a translation underneath.</span><br />
+              <span class="text-ink-500">Into the output language above, by the filter model, one call per bundle. The original is never replaced.</span>
+            </span>
+          </label>
           <label class="flex items-start gap-3 py-2">
             <BaseToggle v-model="form.allowSimulation!" label="Allow simulation" />
             <span class="text-[14px] leading-5">

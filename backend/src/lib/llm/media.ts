@@ -5,6 +5,7 @@ import prisma from '../prisma.js'
 import { settings, transcriptionConfigured } from '../settings.js'
 import { callParsed, callTranscribe, type ImageInput } from './client.js'
 import { chatContextBlock, outputLanguageName } from './prompts.js'
+import { translateBatch } from './translate.js'
 
 /// Reading the media before anyone judges it.
 ///
@@ -65,8 +66,10 @@ export async function rereadMedia(messageId: string): Promise<Message> {
   if (!m.mediaPath || !mediaReadable(m.type, m.mediaMime)) {
     throw Object.assign(new Error('There is nothing to read from this message'), { statusCode: 400 })
   }
-  await prisma.message.update({ where: { id: m.id }, data: { mediaTextStatus: 'PENDING', mediaTextError: null } })
+  await prisma.message.update({ where: { id: m.id }, data: { mediaTextStatus: 'PENDING', mediaTextError: null, translationLang: null } })
   await readOne(m.chat, { ...m, mediaTextStatus: 'PENDING' })
+  const fresh = (await prisma.message.findUnique({ where: { id: m.id } }))!
+  await translateBatch(m.chat, [fresh])
   return (await prisma.message.findUnique({ where: { id: m.id } }))!
 }
 
