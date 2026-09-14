@@ -8,7 +8,7 @@ import { ago, usd, STATUS_LABEL, STATUS_TONE, PRIORITY_TONE } from '../lib/forma
 import BaseBadge from '../components/base/BaseBadge.vue'
 import BaseButton from '../components/base/BaseButton.vue'
 import EmptyState from '../components/base/EmptyState.vue'
-import { MessageSquareText, Send, Search, MessageCircleQuestion, Hourglass, Flame, CheckCircle2, X } from 'lucide-vue-next'
+import { MessageSquareText, Send, Search, MessageCircleQuestion, Hourglass, Flame, CheckCircle2, CircleCheckBig, X } from 'lucide-vue-next'
 
 interface Item {
   id: string
@@ -23,6 +23,8 @@ interface Item {
   counts: { messages: number; deliveries: number }
   /// When the client last came back to ask whether this was done.
   chasedAt: string | null
+  teamStatus?: 'NONE' | 'IN_PROGRESS' | 'RESOLVED'
+  teamBy?: string | null
 }
 
 interface Bucket { count: number; clients: string[]; moreClients: number }
@@ -30,6 +32,7 @@ interface Triage {
   chased: Bucket
   stale: Bucket & { oldestHours: number }
   urgent: Bucket & { urgentCount: number }
+  ready: Bucket & { by: string[] }
 }
 interface Dash {
   items: Record<string, number>
@@ -61,7 +64,7 @@ const TABS = [
 const tab = ref(localStorage.getItem('tapis_dash_tab') || 'open')
 /// A triage view is a filter over open work. It overrides the status tab,
 /// because "urgent, but only the ones marked done" is not a question.
-const view = ref<'chased' | 'stale' | 'urgent' | ''>('')
+const view = ref<'chased' | 'stale' | 'urgent' | 'ready' | ''>('')
 const groupBy = ref<'client' | 'chat' | 'rule' | 'none'>((localStorage.getItem('tapis_dash_group') as never) || 'client')
 const q = ref('')
 
@@ -127,6 +130,9 @@ const CARDS = [
   },
   { key: 'stale' as const, label: 'Left sitting', icon: Hourglass, tone: 'warning', blurb: 'Open, untouched over 48 hours' },
   { key: 'urgent' as const, label: 'Urgent & high', icon: Flame, tone: 'warning', blurb: 'Open, marked high or urgent' },
+  /// The one bucket that is good news: your side said it is done, the
+  /// item just has not been closed.
+  { key: 'ready' as const, label: 'Ready to close', icon: CircleCheckBig, tone: 'success', blurb: 'Your side said it is done' },
 ]
 
 const triage = computed(() => dash.value?.triage)
@@ -134,14 +140,14 @@ const triage = computed(() => dash.value?.triage)
 /// "Nothing" fill a phone screen with the absence of news.
 const liveCards = computed(() => CARDS.filter((c) => bucket(c.key).count || view.value === c.key))
 const clearCards = computed(() => CARDS.filter((c) => !bucket(c.key).count && view.value !== c.key))
-const allClear = computed(() => !!triage.value && !triage.value.chased.count && !triage.value.stale.count && !triage.value.urgent.count)
+const allClear = computed(() => !!triage.value && !triage.value.chased.count && !triage.value.stale.count && !triage.value.urgent.count && !triage.value.ready.count)
 
-function bucket(key: 'chased' | 'stale' | 'urgent'): Bucket & { oldestHours?: number; urgentCount?: number } {
+function bucket(key: 'chased' | 'stale' | 'urgent' | 'ready'): Bucket & { oldestHours?: number; urgentCount?: number } {
   return triage.value?.[key] ?? { count: 0, clients: [], moreClients: 0 }
 }
 
 /// The line under each card: who it is, and for age, how bad the worst is.
-function detail(key: 'chased' | 'stale' | 'urgent'): string {
+function detail(key: 'chased' | 'stale' | 'urgent' | 'ready'): string {
   const b = bucket(key)
   if (!b.count) return 'Nothing'
   const names = b.clients.join(', ') + (b.moreClients ? ` +${b.moreClients} more` : '')
@@ -151,10 +157,11 @@ function detail(key: 'chased' | 'stale' | 'urgent'): string {
     return `oldest ${age} · ${names}`
   }
   if (key === 'urgent' && triage.value?.urgent.urgentCount) return `${triage.value.urgent.urgentCount} urgent · ${names}`
+  if (key === 'ready' && triage.value?.ready.by.length) return `says ${triage.value.ready.by.map((b) => (b === 'us' ? 'you' : b)).join(', ')} · ${names}`
   return names
 }
 
-function toggleView(key: 'chased' | 'stale' | 'urgent') {
+function toggleView(key: 'chased' | 'stale' | 'urgent' | 'ready') {
   if (!bucket(key).count && view.value !== key) return
   view.value = view.value === key ? '' : key
 }
@@ -210,7 +217,7 @@ function groupAge(items: Item[]): string {
         <component
           :is="c.icon"
           class="mt-0.5 size-5 shrink-0"
-          :class="bucket(c.key).count ? (c.tone === 'danger' ? 'text-danger-600' : 'text-warning-600') : 'text-ink-400'"
+          :class="bucket(c.key).count ? (c.tone === 'danger' ? 'text-danger-600' : c.tone === 'success' ? 'text-success-600' : 'text-warning-600') : 'text-ink-400'"
           :stroke-width="1.75"
           aria-hidden="true"
         />
@@ -230,7 +237,7 @@ function groupAge(items: Item[]): string {
     <p v-if="!allClear && clearCards.length" class="-mt-2 mb-5 text-[13px] leading-[18px] text-ink-500">
       Also clear:
       <template v-for="(c, idx) in clearCards" :key="c.key">
-        {{ idx ? ', ' : '' }}<span class="lowercase">nothing {{ c.key === 'chased' ? 'chasing you' : c.key === 'stale' ? 'left sitting' : 'urgent or high' }}</span>
+        {{ idx ? ', ' : '' }}<span class="lowercase">nothing {{ c.key === 'chased' ? 'chasing you' : c.key === 'stale' ? 'left sitting' : c.key === 'ready' ? 'ready to close' : 'urgent or high' }}</span>
       </template>.
     </p>
 
@@ -323,6 +330,8 @@ function groupAge(items: Item[]): string {
               <BaseBadge :tone="STATUS_TONE[it.status]">{{ STATUS_LABEL[it.status] }}</BaseBadge>
               <BaseBadge v-if="it.priority === 'HIGH' || it.priority === 'URGENT'" :tone="PRIORITY_TONE[it.priority]">{{ it.priority }}</BaseBadge>
               <BaseBadge v-if="it.chasedAt && (it.status === 'NEW' || it.status === 'IN_PROGRESS')" tone="bad">chased {{ ago(it.chasedAt) }}</BaseBadge>
+              <BaseBadge v-if="it.teamStatus === 'RESOLVED' && (it.status === 'NEW' || it.status === 'IN_PROGRESS')" tone="ok">{{ it.teamBy === 'us' ? 'you' : it.teamBy || 'your side' }} says done</BaseBadge>
+              <BaseBadge v-else-if="it.teamStatus === 'IN_PROGRESS' && it.status === 'NEW'" tone="info">{{ it.teamBy === 'us' ? 'you' : it.teamBy || 'your side' }} on it</BaseBadge>
             </div>
             <p class="mt-1 line-clamp-2 text-[14px] leading-5 text-ink-600">{{ it.brief }}</p>
             <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] leading-[18px] text-ink-500">

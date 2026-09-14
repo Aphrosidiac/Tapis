@@ -55,7 +55,7 @@ defineTool({
     const link = baileysStatus()
     const dayAgo = new Date(Date.now() - 86_400_000)
     const staleBefore = new Date(Date.now() - 48 * 3_600_000)
-    const [pending, bundles, failedBundles, open, chased, stale, urgent, tracked] = await Promise.all([
+    const [pending, bundles, failedBundles, open, chased, stale, urgent, tracked, ready] = await Promise.all([
       prisma.message.count({ where: { filterStatus: 'PENDING' } }),
       prisma.bundle.groupBy({ by: ['status'], where: { createdAt: { gte: dayAgo } }, _count: { _all: true } }),
       prisma.bundle.findMany({ where: { status: 'FAILED' }, orderBy: { createdAt: 'desc' }, take: 3, select: { id: true, error: true, createdAt: true, chat: { select: { name: true } } } }),
@@ -64,6 +64,7 @@ defineTool({
       prisma.item.count({ where: { status: { in: ['NEW', 'IN_PROGRESS'] }, lastActivityAt: { lt: staleBefore } } }),
       prisma.item.count({ where: { status: { in: ['NEW', 'IN_PROGRESS'] }, priority: { in: ['HIGH', 'URGENT'] } } }),
       prisma.chat.count({ where: { tracked: true } }),
+      prisma.item.count({ where: { status: { in: ['NEW', 'IN_PROGRESS'] }, teamStatus: 'RESOLVED' } }),
     ])
     const s = settings()
     return {
@@ -74,7 +75,7 @@ defineTool({
         bundlesLast24h: Object.fromEntries(bundles.map((b) => [b.status, b._count._all])),
         recentFailures: failedBundles.map((b) => ({ bundleId: b.id, chat: b.chat.name, error: clip(b.error, 200), at: b.createdAt.toISOString() })),
       },
-      triage: { openItems: open, chasingYou: chased, leftSitting48h: stale, urgentOrHigh: urgent },
+      triage: { openItems: open, chasingYou: chased, leftSitting48h: stale, urgentOrHigh: urgent, readyToClose: ready },
       trackedChats: tracked,
     }
   },
@@ -187,7 +188,7 @@ defineTool({
     'Tracked items (the requests, complaints and bug reports the pipeline produced). Filter by status (NEW, IN_PROGRESS, DONE, DISMISSED), a triage view (chased = client asked again; stale = open with no activity for 48h; urgent = HIGH/URGENT), chat, client or text. Default: open items, most recent activity first.',
   schema: z.object({
     status: z.array(z.enum(['NEW', 'IN_PROGRESS', 'DONE', 'DISMISSED'])).optional(),
-    view: z.enum(['chased', 'stale', 'urgent']).optional(),
+    view: z.enum(['chased', 'stale', 'urgent', 'ready']).optional().describe('ready = open items our own side has said are done'),
     chatId: z.string().optional(),
     client: z.string().optional().describe('Exact client name as set on the chat'),
     q: z.string().optional().describe('Substring in title or brief'),
@@ -203,7 +204,9 @@ defineTool({
           ? { status: { in: OPEN }, lastActivityAt: { lt: staleBefore } }
           : input.view === 'urgent'
             ? { status: { in: OPEN }, priority: { in: ['HIGH', 'URGENT'] } }
-            : {}
+            : input.view === 'ready'
+              ? { status: { in: OPEN }, teamStatus: 'RESOLVED' }
+              : {}
     const items = await prisma.item.findMany({
       where: {
         ...(input.status?.length && !input.view ? { status: { in: input.status } } : !input.view && !input.status ? { status: { in: OPEN } } : {}),
@@ -231,6 +234,7 @@ defineTool({
       messages: i._count.messages,
       lastActivityAt: i.lastActivityAt.toISOString(),
       chasedAt: i.messages[0]?.createdAt.toISOString() ?? null,
+      ...(i.teamStatus !== 'NONE' ? { ourSide: { status: i.teamStatus, note: i.teamNote, by: i.teamBy, at: i.teamAt?.toISOString() } } : {}),
       createdAt: i.createdAt.toISOString(),
     }))
   },
@@ -260,6 +264,7 @@ defineTool({
       priority: item.priority,
       brief: item.brief,
       suggestion: item.suggestion,
+      ...(item.teamStatus !== 'NONE' ? { ourSide: { status: item.teamStatus, note: item.teamNote, by: item.teamBy, at: item.teamAt?.toISOString() } } : {}),
       extra: item.extra,
       chat: item.chat,
       rules: item.rules.map((r) => r.rule),
@@ -384,8 +389,8 @@ const SCHEMA: Record<string, string> = {
   messages:
     'id, chat_id, wa_message_id, sender_wa_id, sender_name, from_me, type (TEXT|IMAGE|VIDEO|AUDIO|DOCUMENT|STICKER|LOCATION|CONTACT), text, media_mime, media_text, media_text_status, text_translation, media_text_translation, sent_at, received_at, simulated, filter_status (PENDING|DISMISSED|FLAGGED|ATTACHED|SKIPPED), filter_reason, filter_rule_ids, bundle_id, rescued_at',
   bundles: 'id, chat_id, trigger, status (FILTERING|ANALYZING|DONE|FAILED), message_count, flagged_count, items_created, items_updated, error, created_at, completed_at',
-  items: 'id, chat_id, title, brief, suggestion, extra (json), priority (LOW|NORMAL|HIGH|URGENT), status (NEW|IN_PROGRESS|DONE|DISMISSED), first_message_at, last_activity_at, created_at, updated_at',
-  item_messages: 'id, item_id, message_id, kind (ORIGIN|FOLLOW_UP|STATUS_CHECK|DETAIL), note, created_at',
+  items: 'id, chat_id, title, brief, suggestion, extra (json), priority (LOW|NORMAL|HIGH|URGENT), status (NEW|IN_PROGRESS|DONE|DISMISSED), team_status (NONE|IN_PROGRESS|RESOLVED — what our own side last said), team_note, team_by, team_at, first_message_at, last_activity_at, created_at, updated_at',
+  item_messages: 'id, item_id, message_id, kind (ORIGIN|FOLLOW_UP|STATUS_CHECK|DETAIL|TEAM_UPDATE), note, created_at',
   item_rules: 'item_id, rule_id',
   item_events: 'id, item_id, kind, detail, created_at',
   deliveries: 'id, item_id, rule_id, to_wa_id, body, status, attempts, error, wa_message_id, created_at, sent_at',

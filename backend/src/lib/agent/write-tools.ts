@@ -43,6 +43,7 @@ defineTool({
     const events: { kind: 'STATUS' | 'NOTE'; detail: string }[] = []
     if (input.status && input.status !== existing.status) {
       data.status = input.status
+      Object.assign(data, { teamStatus: 'NONE', teamNote: null, teamBy: null, teamAt: null })
       events.push({ kind: 'STATUS', detail: `${WHO} moved it from ${existing.status.replace('_', ' ').toLowerCase()} to ${input.status.replace('_', ' ').toLowerCase()}` })
       if (input.status === 'DISMISSED') {
         const origins = await prisma.message.findMany({ where: { id: { in: existing.messages.filter((m) => m.kind === 'ORIGIN').map((m) => m.messageId) } } })

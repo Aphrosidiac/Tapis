@@ -3,7 +3,6 @@ import { join } from 'path'
 import prisma from '../prisma.js'
 import { MEDIA_DIR } from '../paths.js'
 import { mediaReadable } from '../llm/media.js'
-import { isTeam } from '../team.js'
 import { handleControlMessage } from '../agent/whatsapp.js'
 import type { ParsedInbound } from './inbound.js'
 
@@ -176,10 +175,10 @@ export async function handleInbound(parsed: ParsedInbound, download?: MediaDownl
       quotedWaMessageId: parsed.quotedWaMessageId,
       sentAt: parsed.timestamp,
       simulated,
-      // Our own messages — from this phone or from anyone on the team
-      // roster — are context, never candidates.
-      filterStatus: parsed.fromMe || isTeam(parsed.senderWaId) ? 'SKIPPED' : 'PENDING',
-      filterReason: parsed.fromMe ? 'Sent by us' : isTeam(parsed.senderWaId) ? 'Sent by our team' : null,
+      // Our own side's messages are judged too — not as requests, which
+      // the prompts forbid, but for what they tell the client: "fixed",
+      // "will do by Friday". That is how an item learns it can be closed.
+      filterStatus: 'PENDING',
     },
   })
 

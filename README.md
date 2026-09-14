@@ -256,6 +256,18 @@ the bundle; the transcript line says what could not be read and why. Every
 reading is shown under the message on the item, chat and review screens with
 **Read again**, and both readings can be switched off on Settings.
 
+### What our side said
+
+Team members' messages are judged too — never as requests, which both
+prompts forbid, but for what they tell the client. "Dah fix, deployed" from
+Noel attaches to the client's item as **TEAM_UPDATE** and sets the item's
+`teamStatus` to RESOLVED (or IN_PROGRESS for "will do by Friday"), with a
+one-line `teamNote`. The item page then shows *Noel said this is done* with
+**Mark as done** / **Not done yet**; the dashboard gains a fourth triage
+bucket, **Ready to close**, and a *Noel says done* badge on the row. A
+client chasing an item our side called resolved clears it — it is not
+resolved after all — and the operator's own status change consumes it.
+
 ### The two passes
 
 **Filter** — cheap model, one decision per message, plus a short reason and the
@@ -512,6 +524,12 @@ against the same session directory, and never PM2 cluster mode.
 ## Changelog
 
 Newest first. Every entry below was driven by a real account, not a plan.
+
+**Ready to close** — our side's messages now go through the filter for what
+they tell the client, attach as TEAM_UPDATE, and set the item's teamStatus.
+"Scan issue dah fix and deployed" from the developer put *Noel said this is
+done* on the client's item with a one-click Mark as done, and a fourth
+triage bucket on the dashboard.
 
 **The assistant, phase 4** — the morning brief to WhatsApp on a schedule,
 an eval harness over the live API (5/5, $0.003), reflection and brief

@@ -47,7 +47,7 @@ export default async function dashboardRoutes(app: FastifyInstance) {
 
     /// Triage. Three questions an owner actually has, each one a filter you
     /// can click, rather than six numbers about the machine.
-    const [chasedItems, staleItems, urgentItems] = await Promise.all([
+    const [chasedItems, staleItems, urgentItems, readyItems] = await Promise.all([
       // Someone came back to ask whether it is done yet. The single highest
       // signal event in the product: the client is already unhappy enough to
       // chase, and we still have it open.
@@ -67,6 +67,14 @@ export default async function dashboardRoutes(app: FastifyInstance) {
         where: { status: OPEN, priority: { in: ['HIGH', 'URGENT'] } },
         orderBy: [{ priority: 'desc' }, { lastActivityAt: 'desc' }],
         select: { id: true, title: true, priority: true, chat: { select: { name: true, clientName: true } } },
+        take: 50,
+      }),
+      // Our own side said it is done and the item is still open: the one
+      // kind of open item that costs nothing but a click.
+      prisma.item.findMany({
+        where: { status: OPEN, teamStatus: 'RESOLVED' },
+        orderBy: { teamAt: 'desc' },
+        select: { id: true, title: true, teamBy: true, chat: { select: { name: true, clientName: true } } },
         take: 50,
       }),
     ])
@@ -93,6 +101,12 @@ export default async function dashboardRoutes(app: FastifyInstance) {
         urgentCount: urgentItems.filter((i) => i.priority === 'URGENT').length,
         clients: who(urgentItems).slice(0, 3),
         moreClients: Math.max(0, who(urgentItems).length - 3),
+      },
+      ready: {
+        count: readyItems.length,
+        clients: who(readyItems).slice(0, 3),
+        moreClients: Math.max(0, who(readyItems).length - 3),
+        by: [...new Set(readyItems.map((i) => i.teamBy).filter(Boolean))].slice(0, 2) as string[],
       },
     }
 

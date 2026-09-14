@@ -18,8 +18,14 @@ const Action = z.object({
   kind: z.enum(['create', 'attach', 'ignore']),
   messageIds: z.array(z.string()),
   itemId: z.string(),
-  attachKind: z.enum(['FOLLOW_UP', 'STATUS_CHECK', 'DETAIL', 'NONE']),
+  attachKind: z.enum(['FOLLOW_UP', 'STATUS_CHECK', 'DETAIL', 'TEAM_UPDATE', 'NONE']),
   note: z.string(),
+  /// What our own side has said about this item, in these or the context
+  /// messages: IN_PROGRESS for a commitment or progress, RESOLVED for
+  /// "fixed / done / deployed", NONE otherwise.
+  teamStatus: z.enum(['NONE', 'IN_PROGRESS', 'RESOLVED']),
+  /// One line, in the output language: who said what. Empty when NONE.
+  teamNote: z.string(),
   title: z.string(),
   brief: z.string(),
   suggestion: z.string(),

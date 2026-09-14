@@ -25,12 +25,6 @@ export async function setTeam(waId: string, on: boolean, name?: string | null): 
   if (on) {
     await prisma.teamMember.upsert({ where: { waId }, create: { waId, name: name ?? null }, update: { ...(name ? { name } : {}) } })
     cached.add(waId)
-    // Anything from them still waiting to be judged is context now, not a
-    // candidate. Already-judged messages keep their history.
-    await prisma.message.updateMany({
-      where: { senderWaId: waId, fromMe: false, filterStatus: 'PENDING' },
-      data: { filterStatus: 'SKIPPED', filterReason: 'Sent by our team' },
-    })
   } else {
     await prisma.teamMember.deleteMany({ where: { waId } })
     cached.delete(waId)

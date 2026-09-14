@@ -2,9 +2,21 @@ import type { Bundle, Chat, Message, Rule } from '@prisma/client'
 import prisma from '../prisma.js'
 import type { AnalyzeAction } from '../llm/analyze.js'
 import { formatNewItem, formatUpdate, queueDeliveries } from './deliver.js'
+import { isTeam } from '../team.js'
 
 /// Applies the analysis's actions. Items are created, follow-ups attached,
 /// deliveries queued. Nothing here rewrites a message.
+
+/// The fields an action's teamStatus writes on the item. `teamBy` is the
+/// last sender from our side among the messages, or "us" for the phone.
+function teamPatch(a: AnalyzeAction, msgs: Message[]): { teamStatus: 'IN_PROGRESS' | 'RESOLVED'; teamNote: string | null; teamBy: string | null; teamAt: Date } | Record<string, never> {
+  if (a.teamStatus === 'NONE') return {}
+  // The analysis judged this from our side; name whoever on our side said
+  // it, else the last speaker — the model saw more context than we do.
+  const ours = [...msgs].reverse().find((m) => m.fromMe || isTeam(m.senderWaId)) ?? msgs[msgs.length - 1]
+  const by = ours ? (ours.fromMe ? 'us' : ours.senderName || ours.senderWaId) : null
+  return { teamStatus: a.teamStatus, teamNote: a.teamNote?.trim() || null, teamBy: by, teamAt: new Date() }
+}
 
 export interface ApplyResult {
   created: number
@@ -50,17 +62,23 @@ export async function applyActions(
           })
         }
         const latest = msgs.reduce((d, m) => (m.sentAt > d ? m.sentAt : d), item.lastActivityAt)
-        // A closed item the client is still asking about is not closed.
-        const reopen = item.status === 'DONE' || item.status === 'DISMISSED'
+        // A closed item the client is still asking about is not closed. Our
+        // own side saying more about a closed item does not reopen it.
+        const reopen = kind !== 'TEAM_UPDATE' && (item.status === 'DONE' || item.status === 'DISMISSED')
+        // What our side said, when it said something; a client chasing an
+        // item our side called resolved means it is not resolved after all.
+        const team = teamPatch(a, msgs)
+        const clearResolved = kind === 'STATUS_CHECK' && a.teamStatus === 'NONE' && item.teamStatus === 'RESOLVED'
         const updated = await prisma.item.update({
           where: { id: item.id },
-          data: { lastActivityAt: latest, ...(reopen ? { status: 'NEW' } : {}) },
+          data: { lastActivityAt: latest, ...(reopen ? { status: 'NEW' } : {}), ...team, ...(clearResolved ? { teamStatus: 'NONE', teamNote: null, teamBy: null, teamAt: null } : {}) },
         })
+        const what = kind === 'STATUS_CHECK' ? 'Status check' : kind === 'DETAIL' ? 'More detail' : kind === 'TEAM_UPDATE' ? 'Our side' : 'Follow-up'
         await prisma.itemEvent.create({
           data: {
             itemId: item.id,
             kind: 'UPDATED',
-            detail: `${kind === 'STATUS_CHECK' ? 'Status check' : kind === 'DETAIL' ? 'More detail' : 'Follow-up'}: ${a.note || `${msgs.length} message(s) attached`}${reopen ? ' — reopened' : ''}`,
+            detail: `${what}: ${a.note || `${msgs.length} message(s) attached`}${reopen ? ' — reopened' : ''}${a.teamStatus === 'RESOLVED' ? ' — our side says it is done' : a.teamStatus === 'IN_PROGRESS' ? ' — our side is on it' : ''}`,
           },
         })
         await prisma.message.updateMany({ where: { id: { in: msgs.map((m) => m.id) } }, data: { filterStatus: 'ATTACHED' } })
@@ -85,6 +103,7 @@ export async function applyActions(
         suggestion: a.suggestion || '',
         extra,
         priority: a.priority,
+        ...teamPatch(a, msgs),
         firstMessageAt: first,
         lastActivityAt: last,
         rules: { create: matched.map((r) => ({ ruleId: r.id })) },

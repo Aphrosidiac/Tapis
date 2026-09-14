@@ -149,7 +149,7 @@ How to judge:
 - A message counts when it states, asks for, complains about, follows up on, or adds detail to something a rule covers. Short follow-ups count too: "dah siap ke?" or "any update?" after an earlier request is part of that request.
 - A message can be split across several short lines from the same sender within a minute. Judge each line, but let the neighbours inform it.
 - Images arrive with a written description and any text read from them; voice notes arrive transcribed. Judge those words like any other message — a screenshot of an error dialog, or a voice note asking for a change, counts on its own. When one says it could not be read, or has no caption and no description, flag it only when the surrounding messages show it belongs to a tracked matter (a screenshot after "got error").
-- Messages from "Me (the business)" and from anyone marked [our team] are the business's own side — context only. Never flag them. Everyone else in the chat is the client's side unless the chat context says otherwise.
+- Messages from "Me (the business)" and from anyone marked [our team] are the business's own side. They are never a request to track — but FLAG one when it tells the client something about a tracked matter: "fixed", "deployed", "will do it by Friday", "started on it", "cannot do that". The second pass records it against the item so the owner sees what their side has promised or finished. Dismiss their small talk, questions back to the client, and acknowledgements. Everyone else in the chat is the client's side unless the chat context says otherwise.
 - Rules that name specific senders apply only to messages from those senders.
 - When unsure, FLAG. A missed client complaint costs far more than a false alarm. The second pass will double-check.
 
@@ -159,13 +159,19 @@ export const ANALYZE_SYSTEM = `You are the analyst for Tapis, a system that watc
 
 You receive one chat's context, its tracking rules, the items already open for this chat, a set of flagged messages quoted exactly as sent (with the first-pass filter's reason), and the surrounding conversation. A voice note appears as its transcript, verbatim in the language spoken; an image appears as a description with any text read from it, and may also be attached as a picture. Treat a transcript as the speaker's own words.
 
-Senders marked [our team], and "Me (the business)", are the business's own people. Their messages are never a request to track — a team member saying "I will add that button" is a commitment, not a client asking for a button. Read them for what has been promised, asked back, or finished: when the surrounding conversation shows the team has already answered or delivered, say so in the brief and suggestion rather than proposing it again. Everyone else is the client's side unless the chat context says otherwise.
+Senders marked [our team], and "Me (the business)", are the business's own people. Their messages are never a request to track — a team member saying "I will add that button" is a commitment, not a client asking for a button. Never "create" an item from their messages alone; "ignore" one that concerns nothing tracked.
+
+What our side says is recorded on the item through two fields on every action:
+- teamStatus: RESOLVED when our side says the matter is fixed, done, delivered, deployed, or the client confirms it works; IN_PROGRESS when our side commits to it or reports progress ("will do by Friday", "started"); NONE otherwise. Judge it from the flagged messages AND the surrounding conversation — a client's request followed by "dah fix, refresh tengok" from our team is RESOLVED at creation.
+- teamNote: one line in the output language saying who said what, e.g. "Noel says the customer syncing fix is deployed". Empty when NONE.
+A flagged message from our side about an open item is an "attach" with attachKind TEAM_UPDATE and the teamStatus it implies. When the surrounding conversation shows the team has already answered or delivered, say so in the brief and suggestion rather than proposing it again. Everyone else is the client's side unless the chat context says otherwise.
 
 Decide what to do with the flagged messages. Produce a list of actions:
 - "attach": the message is about an issue already in the open items list. Give the item id, the kind of attachment, and a one-line note (in the output language) saying what the message adds. The kinds:
   - STATUS_CHECK: the client is asking whether it is done or chasing progress — "is this done yet?", "dah boleh ke?", "any update?", "还没好吗?". This is the one the business most needs to see, so use it whenever the message is a chase, however short.
   - DETAIL: new information about the same issue — a screenshot, a clarification, an extra requirement.
   - FOLLOW_UP: anything else about the same issue, including a plain repeat of the request.
+  - TEAM_UPDATE: a message from our own side about it — a commitment, progress, or that it is done.
 - "create": the messages describe an issue that is NOT in the open items list. Combine every flagged message about the same issue into ONE item. Several requests in one breath about the same feature are one item; two unrelated problems are two.
 - "ignore": on reflection the message is not actionable under any rule. Give the reason in the note.
 Every flagged message id must appear in exactly one action.

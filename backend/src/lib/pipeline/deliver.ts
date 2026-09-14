@@ -40,7 +40,7 @@ export function formatNewItem(item: Item, chat: Chat, rules: Rule[], messages: M
 }
 
 export function formatUpdate(item: Item, chat: Chat, note: string, kind: string, messages: Message[]): string {
-  const what = kind === 'STATUS_CHECK' ? 'Status check' : kind === 'DETAIL' ? 'More detail' : 'Follow-up'
+  const what = kind === 'STATUS_CHECK' ? 'Status check' : kind === 'DETAIL' ? 'More detail' : kind === 'TEAM_UPDATE' ? 'Update from our side' : 'Follow-up'
   const lines = [
     `*${what} — ${chat.clientName ? `${chat.clientName} · ` : ''}${chat.name}*`,
     `*${item.title}* (${item.status.replace('_', ' ').toLowerCase()})`,

@@ -307,6 +307,14 @@ model Item {
   extra      Json       @default("[]")
   status     ItemStatus @default(NEW)
   priority   Priority   @default(NORMAL)
+  /// What our own side last said about it: a commitment or progress
+  /// (IN_PROGRESS), or that it is done (RESOLVED). The dashboard turns a
+  /// RESOLVED on an open item into "ready to close"; the operator's own
+  /// status change consumes it.
+  teamStatus TeamStatus @default(NONE) @map("team_status")
+  teamNote   String?    @map("team_note")
+  teamBy     String?    @map("team_by")
+  teamAt     DateTime?  @map("team_at")
   firstMessageAt DateTime @map("first_message_at")
   lastActivityAt DateTime @map("last_activity_at")
   createdAt  DateTime   @default(now()) @map("created_at")
@@ -337,6 +345,13 @@ enum LinkKind {
   DETAIL       // extra information about the same issue
   STATUS_CHECK // "is this done yet?"
   FOLLOW_UP    // anything else about the same issue
+  TEAM_UPDATE  // our own side reporting progress, a commitment, or a fix
+}
+
+enum TeamStatus {
+  NONE
+  IN_PROGRESS
+  RESOLVED
 }
 
 model ItemMessage {

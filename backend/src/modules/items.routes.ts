@@ -42,7 +42,9 @@ export default async function itemRoutes(app: FastifyInstance) {
           ? { status: { in: OPEN as unknown as never[] }, lastActivityAt: { lt: staleBefore } }
           : view === 'urgent'
             ? { status: { in: OPEN as unknown as never[] }, priority: { in: ['HIGH', 'URGENT'] as never[] } }
-            : {}
+            : view === 'ready'
+              ? { status: { in: OPEN as unknown as never[] }, teamStatus: 'RESOLVED' as never }
+              : {}
 
     const where = {
       // A view is about open work, so it wins over whichever tab was left on.
@@ -133,6 +135,9 @@ export default async function itemRoutes(app: FastifyInstance) {
       }
     }
     if (body.title !== undefined && str(body.title)) data.title = str(body.title).slice(0, 200)
+    // A status the operator chose answers whatever our side suggested;
+    // "keep open" answers it too, without moving anything.
+    if (data.status !== undefined || body.clearTeamStatus === true) Object.assign(data, { teamStatus: 'NONE', teamNote: null, teamBy: null, teamAt: null })
     if (body.note !== undefined && str(body.note)) events.push({ kind: 'NOTE', detail: `${request.user.name}: ${str(body.note).slice(0, 2000)}` })
 
     const item = await prisma.item.update({

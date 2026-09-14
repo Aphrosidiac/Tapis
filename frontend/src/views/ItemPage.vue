@@ -13,7 +13,7 @@ import BaseButton from '../components/base/BaseButton.vue'
 import BaseInput from '../components/base/BaseInput.vue'
 import BaseTextarea from '../components/base/BaseTextarea.vue'
 import BaseSelect from '../components/base/BaseSelect.vue'
-import { ArrowLeft, Send } from 'lucide-vue-next'
+import { ArrowLeft, Send, CircleCheckBig, Hammer } from 'lucide-vue-next'
 
 interface Msg {
   id: string
@@ -43,6 +43,10 @@ interface Item {
   extra: { label: string; value: string }[]
   status: string
   priority: string
+  teamStatus: 'NONE' | 'IN_PROGRESS' | 'RESOLVED'
+  teamNote: string | null
+  teamBy: string | null
+  teamAt: string | null
   firstMessageAt: string
   lastActivityAt: string
   createdAt: string
@@ -98,8 +102,8 @@ async function send() {
   }
 }
 
-const KIND: Record<string, string> = { ORIGIN: 'Original', DETAIL: 'More detail', STATUS_CHECK: 'Status check', FOLLOW_UP: 'Follow-up' }
-const KIND_TONE: Record<string, 'accent' | 'info' | 'warn' | 'neutral'> = { ORIGIN: 'accent', DETAIL: 'info', STATUS_CHECK: 'warn', FOLLOW_UP: 'neutral' }
+const KIND: Record<string, string> = { ORIGIN: 'Original', DETAIL: 'More detail', STATUS_CHECK: 'Status check', FOLLOW_UP: 'Follow-up', TEAM_UPDATE: 'Our side' }
+const KIND_TONE: Record<string, 'accent' | 'info' | 'warn' | 'neutral' | 'ok'> = { ORIGIN: 'accent', DETAIL: 'info', STATUS_CHECK: 'warn', FOLLOW_UP: 'neutral', TEAM_UPDATE: 'ok' }
 function patchMessage(target: { id: string } & Record<string, unknown>, u: Partial<MediaTextMessage>) {
   const { id: _id, ...rest } = u
   Object.assign(target, rest)
@@ -170,6 +174,45 @@ function patchMessage(target: { id: string } & Record<string, unknown>, u: Parti
       </div>
 
       <div class="space-y-6">
+        <!-- What our own side said, and the click it earns. Shown only while
+             the item is open and nobody has answered it. -->
+        <div
+          v-if="item.teamStatus !== 'NONE' && (item.status === 'NEW' || item.status === 'IN_PROGRESS')"
+          class="card border-l-4 p-5"
+          :class="item.teamStatus === 'RESOLVED' ? 'border-l-success-600' : 'border-l-info-600'"
+        >
+          <div class="flex items-start gap-3">
+            <CircleCheckBig v-if="item.teamStatus === 'RESOLVED'" class="mt-0.5 size-5 shrink-0 text-success-600" :stroke-width="1.75" />
+            <Hammer v-else class="mt-0.5 size-5 shrink-0 text-info-600" :stroke-width="1.75" />
+            <div class="min-w-0 flex-1">
+              <p class="text-[15px] font-medium leading-5 text-ink-900">
+                {{ item.teamStatus === 'RESOLVED' ? `${item.teamBy === 'us' ? 'You' : item.teamBy || 'Your side'} said this is done` : `${item.teamBy === 'us' ? 'You' : item.teamBy || 'Your side'} ${item.teamBy === 'us' ? 'are' : 'is'} on it` }}
+              </p>
+              <p v-if="item.teamNote" class="mt-1 text-[14px] leading-5 text-ink-600">{{ item.teamNote }}</p>
+              <p v-if="item.teamAt" class="mt-1 text-[12px] leading-4 text-ink-500">{{ ago(item.teamAt) }} · from the chat</p>
+              <div class="mt-3 flex flex-wrap gap-2">
+                <BaseButton
+                  v-if="item.teamStatus === 'RESOLVED'"
+                  size="sm"
+                  variant="primary"
+                  :loading="busy === 'DONE'"
+                  @click="update({ status: 'DONE' }, 'DONE')"
+                >Mark as done</BaseButton>
+                <BaseButton
+                  v-else-if="item.status === 'NEW'"
+                  size="sm"
+                  variant="primary"
+                  :loading="busy === 'IN_PROGRESS'"
+                  @click="update({ status: 'IN_PROGRESS' }, 'IN_PROGRESS')"
+                >Move to in progress</BaseButton>
+                <BaseButton size="sm" variant="secondary" :loading="busy === 'keep'" @click="update({ clearTeamStatus: true }, 'keep')">
+                  {{ item.teamStatus === 'RESOLVED' ? 'Not done yet' : 'Dismiss' }}
+                </BaseButton>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <Card title="Status">
           <div class="grid grid-cols-2 gap-2">
             <BaseButton
