@@ -13,7 +13,11 @@ export default async function authRoutes(app: FastifyInstance) {
     return { needsSetup: count === 0 }
   })
 
-  app.post('/api/auth/setup', async (request, reply) => {
+  // Ten tries a minute per address is generous for a person and useless
+  // for a password list. Both routes that take a password get it.
+  const guarded = { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }
+
+  app.post('/api/auth/setup', guarded, async (request, reply) => {
     const count = await prisma.user.count()
     if (count > 0) return reply.status(409).send({ error: 'Setup has already been completed' })
     const { email, password, name } = (request.body ?? {}) as Record<string, unknown>
@@ -27,7 +31,7 @@ export default async function authRoutes(app: FastifyInstance) {
     return { token: sign({ id: user.id }), user: { id: user.id, email: user.email, name: user.name } }
   })
 
-  app.post('/api/auth/login', async (request, reply) => {
+  app.post('/api/auth/login', guarded, async (request, reply) => {
     const { email, password } = (request.body ?? {}) as Record<string, unknown>
     const user = await prisma.user.findUnique({ where: { email: str(email).toLowerCase() } })
     if (!user || !(await bcrypt.compare(str(password), user.password))) {

@@ -534,7 +534,16 @@ async function downloadMedia(sock: any, mod: any, parsed: ParsedInbound) {
   }
   const mime: string = node.mimetype ?? 'application/octet-stream'
   const buffer: Buffer = await mod.downloadMediaMessage(parsed.raw, 'buffer', {}, { logger: makeQuietLogger(), reuploadRequest: sock.updateMediaMessage })
-  const ext = MEDIA_EXT[mime] ?? (node.fileName?.split('.').pop() ?? 'bin')
+  // fileLength is the sender's claim; the buffer is the truth.
+  if (buffer.length > MEDIA_MAX_BYTES) {
+    logLine(`dropping media for ${parsed.waMessageId}: ${buffer.length} bytes after download`)
+    return null
+  }
+  // The extension goes into a file path. A sender controls fileName, so
+  // anything but a short run of letters and digits is treated as unknown —
+  // "doc.pdf/../../creds" must never become part of a path.
+  const claimed = node.fileName?.split('.').pop()?.toLowerCase() ?? ''
+  const ext = MEDIA_EXT[mime] ?? (/^[a-z0-9]{1,8}$/.test(claimed) ? claimed : 'bin')
   return { buffer, mime: mime.split(';')[0], ext }
 }
 

@@ -6,6 +6,8 @@ import { simulationAllowed } from '../lib/settings.js'
 import { handleInbound } from '../lib/whatsapp/ingest.js'
 import { tick } from '../lib/pipeline/scheduler.js'
 import { str, bool, waDigits } from '../lib/input.js'
+import { MEDIA_DIR } from '../lib/paths.js'
+import { join, resolve, sep, basename } from 'path'
 
 /// The simulator: feeds a message through the real ingest and pipeline as if
 /// a phone had sent it. How the system is exercised without a WhatsApp link,
@@ -75,7 +77,17 @@ export default async function devRoutes(app: FastifyInstance) {
     const { messageId } = request.params as { messageId: string }
     const m = await prisma.message.findUnique({ where: { id: messageId }, select: { mediaPath: true, mediaMime: true } })
     if (!m?.mediaPath || !existsSync(m.mediaPath)) return reply.status(404).send({ error: 'No media stored for this message' })
-    reply.header('Content-Type', m.mediaMime ?? 'application/octet-stream')
+    if (!resolve(m.mediaPath).startsWith(resolve(MEDIA_DIR) + sep)) return reply.status(404).send({ error: 'No media stored for this message' })
+    // The stored mime is whatever the sender's phone claimed. Served on the
+    // app's own origin, a "document" declared text/html would run as the
+    // operator — so only types a browser renders harmlessly keep their name,
+    // everything else downloads as bytes, and nothing served here may script.
+    const mime = m.mediaMime ?? ''
+    const renderable = /^(image\/(jpeg|png|webp|gif)|audio\/(ogg|mpeg|mp4)|video\/mp4|application\/pdf)$/.test(mime)
+    reply.header('Content-Type', renderable ? mime : 'application/octet-stream')
+    reply.header('Content-Disposition', renderable ? 'inline' : `attachment; filename="${basename(m.mediaPath)}"`)
+    reply.header('Content-Security-Policy', "sandbox; default-src 'none'")
+    reply.header('X-Content-Type-Options', 'nosniff')
     reply.header('Cache-Control', 'private, max-age=3600')
     return reply.send(createReadStream(m.mediaPath))
   })

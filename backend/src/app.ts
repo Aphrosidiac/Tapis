@@ -1,6 +1,7 @@
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import helmet from '@fastify/helmet'
+import rateLimit from '@fastify/rate-limit'
 import fastifyStatic from '@fastify/static'
 import { existsSync } from 'fs'
 import { join } from 'path'
@@ -34,6 +35,11 @@ export async function buildApp(opts: BuildOptions = {}) {
 
   await app.register(cors, { origin: process.env.NODE_ENV === 'production' ? false : true })
   await app.register(helmet, { contentSecurityPolicy: false })
+  // Global ceiling is loose — the dashboard polls — and the password routes
+  // set their own tight one. trustProxy above makes the address the real
+  // client's behind nginx; exposed directly, X-Forwarded-For is untrusted
+  // input, so keep this behind a proxy.
+  await app.register(rateLimit, { global: true, max: 600, timeWindow: '1 minute' })
 
   app.setErrorHandler((err, _request, reply) => {
     const e = err as Error & { statusCode?: number }
