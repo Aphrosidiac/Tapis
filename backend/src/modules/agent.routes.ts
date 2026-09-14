@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import prisma from '../lib/prisma.js'
 import { authenticate } from '../middleware/auth.js'
 import { str, int } from '../lib/input.js'
-import { startTurn, subscribe, stopRun, activeRun, type AgentEvent } from '../lib/agent/run.js'
+import { startTurn, subscribe, stopRun, activeRun, approveAction, declineAction, undoAction, actionView, type AgentEvent } from '../lib/agent/run.js'
 import { allTools } from '../lib/agent/tools.js'
 import { settings } from '../lib/settings.js'
 
@@ -26,9 +26,16 @@ export default async function agentRoutes(app: FastifyInstance) {
 
   app.get('/api/agent/threads/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const thread = await prisma.agentThread.findUnique({ where: { id }, include: { messages: { orderBy: { seq: 'asc' } } } })
+    const thread = await prisma.agentThread.findUnique({ where: { id }, include: { messages: { orderBy: { seq: 'asc' } }, actions: { orderBy: { createdAt: 'asc' } } } })
     if (!thread) return reply.status(404).send({ error: 'Conversation not found' })
-    return { thread: { ...thread, running: !!activeRun(id), messages: thread.messages.map((m) => ({ id: m.id, seq: m.seq, role: m.role, content: m.content, createdAt: m.createdAt })) } }
+    return {
+      thread: {
+        ...thread,
+        running: !!activeRun(id),
+        messages: thread.messages.map((m) => ({ id: m.id, seq: m.seq, role: m.role, content: m.content, createdAt: m.createdAt })),
+        actions: thread.actions.map(actionView),
+      },
+    }
   })
 
   app.put('/api/agent/threads/:id', async (request, reply) => {
@@ -91,6 +98,19 @@ export default async function agentRoutes(app: FastifyInstance) {
       unsubscribe()
     })
   })
+
+  const act = (fn: (id: string, body: Record<string, unknown>) => Promise<unknown>) => async (request: { params: unknown; body: unknown }, reply: { status: (n: number) => { send: (b: unknown) => unknown } }) => {
+    const { id } = request.params as { id: string }
+    try {
+      return await fn(id, (request.body ?? {}) as Record<string, unknown>)
+    } catch (err) {
+      const e = err as Error & { statusCode?: number }
+      return reply.status(e.statusCode ?? 500).send({ error: e.message })
+    }
+  }
+  app.post('/api/agent/actions/:id/approve', act(async (id) => ({ action: await approveAction(id) })))
+  app.post('/api/agent/actions/:id/decline', act(async (id, body) => ({ action: await declineAction(id, str(body.reason) || undefined) })))
+  app.post('/api/agent/actions/:id/undo', act(async (id) => undoAction(id)))
 
   app.get('/api/agent/tools', async () => ({ tools: allTools().map((t) => ({ name: t.name, tier: t.tier, description: t.description })) }))
 }

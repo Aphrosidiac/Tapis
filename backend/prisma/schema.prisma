@@ -478,8 +478,14 @@ model AgentAction {
   id        String      @id @default(uuid())
   threadId  String      @map("thread_id")
   thread    AgentThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  /// The model's tool_call id, so a card in the transcript finds its action.
+  callId    String?     @map("call_id")
   tool      String
   tier      String
+  /// done · pending (outward, awaiting the operator) · declined · undone · failed
+  status    String      @default("done")
+  /// One line a person can read: "Send WhatsApp to +60… (142 chars)".
+  summary   String?
   input     Json
   output    Json?
   before    Json?

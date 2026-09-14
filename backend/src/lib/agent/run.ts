@@ -3,9 +3,10 @@ import prisma from '../prisma.js'
 import { settings } from '../settings.js'
 import { estimateCostUsd } from '../llm/models.js'
 import { streamCompletion, type WireMessage, type ToolCall } from './provider.js'
-import { allTools, getTool, wireTools, type AgentTool } from './tools.js'
+import { allTools, getTool, wireTools, isAudited, type AgentTool } from './tools.js'
 import { staticSystemPrompt, liveBrief } from './prompt.js'
 import './read-tools.js'
+import './write-tools.js'
 
 /// The loop. One turn = the operator says something; the model reasons,
 /// calls tools, reads results, and answers — every step persisted as it
@@ -25,6 +26,7 @@ export type AgentEvent =
   | { type: 'reasoning'; delta: string }
   | { type: 'tool_start'; callId: string; name: string; input: unknown }
   | { type: 'tool_end'; callId: string; name: string; ok: boolean; ms: number; preview: string }
+  | { type: 'approval'; action: ActionView }
   | { type: 'step'; step: number; model: string }
   | { type: 'message'; message: StoredMessage }
   | { type: 'done'; usage: { input: number; output: number; costUsd: number } }
@@ -36,6 +38,24 @@ export interface StoredMessage {
   role: string
   content: MessageContent
   createdAt: string
+}
+
+export interface ActionView {
+  id: string
+  callId: string | null
+  tool: string
+  tier: string
+  status: string
+  summary: string | null
+  input: unknown
+  output: unknown
+  undoable: boolean
+  createdAt: string
+}
+
+export function actionView(a: { id: string; callId: string | null; tool: string; tier: string; status: string; summary: string | null; input: unknown; output: unknown; before: unknown; createdAt: Date }): ActionView {
+  const tool = getTool(a.tool)
+  return { id: a.id, callId: a.callId, tool: a.tool, tier: a.tier, status: a.status, summary: a.summary, input: a.input, output: a.output, undoable: a.status === 'done' && !!tool?.undo && a.before !== null && a.before !== undefined, createdAt: a.createdAt.toISOString() }
 }
 
 export type MessageContent =
@@ -98,18 +118,29 @@ async function append(threadId: string, role: string, content: MessageContent): 
 /// Starts a turn. Returns once the user message is stored and the run is
 /// registered; the work continues in the background and streams events.
 export async function startTurn(threadId: string, text: string): Promise<{ userMessage: StoredMessage }> {
+  const { userMessage } = await beginRun(threadId, { text })
+  return { userMessage: userMessage! }
+}
+
+/// Resumes a thread with no new operator message — after an approval or a
+/// decline, the model picks up from the system row that records it.
+export async function continueTurn(threadId: string): Promise<void> {
+  await beginRun(threadId, {})
+}
+
+async function beginRun(threadId: string, opts: { text?: string }): Promise<{ userMessage: StoredMessage | null }> {
   if (activeRun(threadId)) throw Object.assign(new Error('The assistant is still working on the last message'), { statusCode: 409 })
   const thread = await prisma.agentThread.findUnique({ where: { id: threadId } })
   if (!thread) throw Object.assign(new Error('Conversation not found'), { statusCode: 404 })
 
-  const userMessage = await append(threadId, 'user', { text })
+  const userMessage = opts.text ? await append(threadId, 'user', { text: opts.text }) : null
   const run: Run = { threadId, events: [], subscribers: new Set(), abort: new AbortController(), done: false }
   runs.set(threadId, run)
   await prisma.agentThread.update({
     where: { id: threadId },
-    data: { status: 'running', lastMessageAt: new Date(), ...(thread.turns === 0 ? { title: titleFrom(text) } : {}) },
+    data: { status: 'running', lastMessageAt: new Date(), ...(thread.turns === 0 && opts.text ? { title: titleFrom(opts.text) } : {}) },
   })
-  emit(run, { type: 'message', message: userMessage })
+  if (userMessage) emit(run, { type: 'message', message: userMessage })
 
   void runTurn(run)
     .catch(async (err) => {
@@ -259,11 +290,25 @@ interface ToolOutcome {
 async function executeTool(run: Run, call: { id: string; name: string; input: unknown }): Promise<ToolOutcome> {
   const started = Date.now()
   const tool: AgentTool | undefined = getTool(call.name)
-  const finish = async (output: unknown, isError: boolean, invalid = false): Promise<ToolOutcome> => {
+  const finish = async (output: unknown, isError: boolean, invalid = false, audit: { before?: unknown; after?: unknown } = {}): Promise<ToolOutcome> => {
     const ms = Date.now() - started
     await prisma.agentAction
       .create({
-        data: { threadId: run.threadId, tool: call.name, tier: tool?.tier ?? 'read', input: (call.input ?? {}) as object, output: output as object, ok: !isError, error: isError ? String((output as any)?.error ?? '').slice(0, 500) : null, latencyMs: ms },
+        data: {
+          threadId: run.threadId,
+          callId: call.id,
+          tool: call.name,
+          tier: tool?.tier ?? 'read',
+          status: isError ? 'failed' : 'done',
+          summary: tool?.summarize ? safeSummary(tool, call.input) : null,
+          input: (call.input ?? {}) as object,
+          output: output as object,
+          before: audit.before === undefined ? undefined : (audit.before as object),
+          after: audit.after === undefined ? undefined : (audit.after as object),
+          ok: !isError,
+          error: isError ? String((output as any)?.error ?? '').slice(0, 500) : null,
+          latencyMs: ms,
+        },
       })
       .catch((err) => logLine('could not record an agent action', err))
     emit(run, { type: 'tool_end', callId: call.id, name: call.name, ok: !isError, ms, preview: preview(output) })
@@ -280,16 +325,100 @@ async function executeTool(run: Run, call: { id: string; name: string; input: un
     const issue = parsed.error.issues[0]
     return finish({ error: `Invalid arguments: ${issue?.message ?? 'schema mismatch'}${issue?.path.length ? ` at ${issue.path.join('.')}` : ''}` }, true, true)
   }
+
+  // Outward tools never run from here. The call is parked for the operator;
+  // the model is told to say what it asked for and stop, and the thread
+  // resumes when the person decides.
+  if (tool.tier === 'outward') {
+    const action = await prisma.agentAction.create({
+      data: { threadId: run.threadId, callId: call.id, tool: call.name, tier: 'outward', status: 'pending', summary: safeSummary(tool, parsed.data), input: parsed.data as object, latencyMs: 0 },
+    })
+    emit(run, { type: 'approval', action: actionView(action) })
+    const output = { pending: true, actionId: action.id, note: 'This needs the operator\'s approval. Tell the operator exactly what you asked to do and why, then end your turn — you will be resumed once they approve or decline. Do not call this tool again for the same action.' }
+    emit(run, { type: 'tool_end', callId: call.id, name: call.name, ok: true, ms: Date.now() - started, preview: 'awaiting approval' })
+    return { id: call.id, name: call.name, output, isError: false, invalid: false, ms: Date.now() - started }
+  }
+
   try {
-    const output = await Promise.race([
-      tool.run(parsed.data, { threadId: run.threadId, log: (m) => logLine(`${call.name}: ${m}`) }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error(`${call.name} took longer than ${TOOL_TIMEOUT_MS / 1000}s`)), TOOL_TIMEOUT_MS)),
-    ])
+    const raw = await runWithTimeout(tool, parsed.data, { threadId: run.threadId, approved: false, log: (m) => logLine(`${call.name}: ${m}`) })
+    const { output, before, after } = isAudited(raw) ? { output: raw.result, before: raw.before, after: raw.after } : { output: raw, before: undefined, after: undefined }
     const isError = !!output && typeof output === 'object' && 'error' in (output as object) && Object.keys(output as object).length === 1
-    return finish(output ?? { ok: true }, isError)
+    return finish(output ?? { ok: true }, isError, false, { before, after })
   } catch (err) {
     return finish({ error: (err instanceof Error ? err.message : String(err)).slice(0, 500) }, true)
   }
+}
+
+function runWithTimeout(tool: AgentTool, input: unknown, ctx: { threadId: string; approved: boolean; log: (m: string) => void }): Promise<unknown> {
+  return Promise.race([
+    tool.run(input, ctx),
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`${tool.name} took longer than ${TOOL_TIMEOUT_MS / 1000}s`)), TOOL_TIMEOUT_MS)),
+  ])
+}
+
+function safeSummary(tool: AgentTool, input: unknown): string | null {
+  try {
+    return tool.summarize?.(input) ?? null
+  } catch {
+    return null
+  }
+}
+
+// ── The operator's side of an action ─────────────────────────────────────
+
+/// Runs a parked outward call. The result becomes a system row the model
+/// reads when the thread resumes.
+export async function approveAction(actionId: string): Promise<ActionView> {
+  const action = await prisma.agentAction.findUnique({ where: { id: actionId } })
+  if (!action) throw Object.assign(new Error('Action not found'), { statusCode: 404 })
+  if (action.status !== 'pending') throw Object.assign(new Error('This action is not waiting for approval'), { statusCode: 409 })
+  if (activeRun(action.threadId)) throw Object.assign(new Error('Wait for the assistant to finish its turn first'), { statusCode: 409 })
+  const tool = getTool(action.tool)
+  if (!tool) throw Object.assign(new Error('That tool no longer exists'), { statusCode: 410 })
+  const started = Date.now()
+  let output: unknown
+  let before: unknown
+  let after: unknown
+  let ok = true
+  try {
+    const raw = await runWithTimeout(tool, action.input, { threadId: action.threadId, approved: true, log: (m) => logLine(`${tool.name}: ${m}`) })
+    ;({ output, before, after } = isAudited(raw) ? { output: raw.result, before: raw.before, after: raw.after } : { output: raw, before: undefined, after: undefined })
+    ok = !(output && typeof output === 'object' && 'error' in (output as object) && Object.keys(output as object).length === 1)
+  } catch (err) {
+    output = { error: (err instanceof Error ? err.message : String(err)).slice(0, 500) }
+    ok = false
+  }
+  const updated = await prisma.agentAction.update({
+    where: { id: actionId },
+    data: { status: ok ? 'done' : 'failed', ok, output: output as object, before: before === undefined ? undefined : (before as object), after: after === undefined ? undefined : (after as object), error: ok ? null : String((output as any)?.error ?? ''), latencyMs: Date.now() - started },
+  })
+  await append(action.threadId, 'system', { text: `The operator APPROVED "${action.summary ?? action.tool}". It has been carried out. Result: ${JSON.stringify(output).slice(0, 1500)}. Continue from here — tell the operator it is done, and finish anything that depended on it.` })
+  await continueTurn(action.threadId)
+  return actionView(updated)
+}
+
+export async function declineAction(actionId: string, reason?: string): Promise<ActionView> {
+  const action = await prisma.agentAction.findUnique({ where: { id: actionId } })
+  if (!action) throw Object.assign(new Error('Action not found'), { statusCode: 404 })
+  if (action.status !== 'pending') throw Object.assign(new Error('This action is not waiting for approval'), { statusCode: 409 })
+  if (activeRun(action.threadId)) throw Object.assign(new Error('Wait for the assistant to finish its turn first'), { statusCode: 409 })
+  const updated = await prisma.agentAction.update({ where: { id: actionId }, data: { status: 'declined', ok: false, error: reason?.slice(0, 500) ?? null } })
+  await append(action.threadId, 'system', { text: `The operator DECLINED "${action.summary ?? action.tool}"${reason ? ` — ${reason}` : ''}. Do not retry it. Acknowledge briefly and offer what else you can do.` })
+  await continueTurn(action.threadId)
+  return actionView(updated)
+}
+
+/// Reverses a done write from its audit record.
+export async function undoAction(actionId: string): Promise<{ action: ActionView; note: string }> {
+  const action = await prisma.agentAction.findUnique({ where: { id: actionId } })
+  if (!action) throw Object.assign(new Error('Action not found'), { statusCode: 404 })
+  if (action.status !== 'done') throw Object.assign(new Error('Only a completed action can be undone'), { statusCode: 409 })
+  const tool = getTool(action.tool)
+  if (!tool?.undo || action.before === null || action.before === undefined) throw Object.assign(new Error('This action cannot be undone'), { statusCode: 400 })
+  const note = await tool.undo({ input: action.input, before: action.before, after: action.after })
+  const updated = await prisma.agentAction.update({ where: { id: actionId }, data: { status: 'undone', undoneAt: new Date() } })
+  await append(action.threadId, 'system', { text: `The operator UNDID "${action.summary ?? action.tool}": ${note}.` })
+  return { action: actionView(updated), note }
 }
 
 function preview(output: unknown): string {

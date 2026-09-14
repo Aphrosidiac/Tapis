@@ -54,6 +54,7 @@ backend/src
       provider.ts         streaming chat completions with tools, one wire shape
       tools.ts            the registry: typed, tiered tools
       read-tools.ts       what it can look at, plus read-only SQL
+      write-tools.ts      what it can change (audited, undoable) and what waits for approval
       prompt.ts           the frozen system prompt and the live brief
       run.ts              the loop: persist, validate, budget, escalate, stream
     pipeline/

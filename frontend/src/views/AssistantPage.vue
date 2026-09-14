@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Plus, Square, SendHorizontal, Trash2, ChevronDown, ChevronRight, Loader2, Wrench, MessagesSquare, X } from 'lucide-vue-next'
+import { Plus, Square, SendHorizontal, Trash2, ChevronDown, ChevronRight, Loader2, Wrench, MessagesSquare, X, ShieldAlert, Undo2, Check } from 'lucide-vue-next'
 import { api, errorMessage } from '../lib/api'
 import { useToast } from '../composables/useToast'
 import { streamAgentEvents, type AgentEvent } from '../lib/agentStream'
@@ -18,14 +18,17 @@ interface Thread { id: string; title: string; status: string; running: boolean; 
 interface ToolCall { id: string; name: string; input: unknown }
 interface ToolResult { id: string; name: string; output: unknown; isError: boolean; ms: number }
 interface Msg { id: string; seq: number; role: string; content: { text?: string; reasoning?: string; toolCalls?: ToolCall[]; toolResults?: ToolResult[] }; createdAt: string }
+interface Action { id: string; callId: string | null; tool: string; tier: string; status: string; summary: string | null; input: unknown; output: unknown; undoable: boolean; createdAt: string }
 
 const route = useRoute()
 const router = useRouter()
-const { bad } = useToast()
+const { ok, bad } = useToast()
 
 const threads = ref<Thread[]>([])
 const thread = ref<Thread | null>(null)
 const messages = ref<Msg[]>([])
+const actions = ref<Action[]>([])
+const acting = ref('')
 const draft = ref('')
 const running = ref(false)
 const listOpen = ref(false)
@@ -52,9 +55,10 @@ async function loadThreads() {
 
 async function loadThread(id: string) {
   try {
-    const { data } = await api.get<{ thread: Thread & { messages: Msg[] } }>(`/agent/threads/${id}`)
+    const { data } = await api.get<{ thread: Thread & { messages: Msg[]; actions: Action[] } }>(`/agent/threads/${id}`)
     thread.value = data.thread
     messages.value = data.thread.messages
+    actions.value = data.thread.actions
     running.value = data.thread.running
     await scrollDown()
     if (data.thread.running) attach(id)
@@ -92,18 +96,21 @@ async function send() {
   const text = draft.value.trim()
   if (!text || running.value) return
   let id = threadId.value
-  if (!id) {
-    const { data } = await api.post<{ thread: Thread }>('/agent/threads')
-    threads.value.unshift({ ...data.thread, running: false })
-    id = data.thread.id
-    await router.push(`/assistant/${id}`)
-  }
-  draft.value = ''
-  running.value = true
-  live.value = { text: '', reasoning: '', tools: new Map() }
   try {
+    if (!id) {
+      const { data } = await api.post<{ thread: Thread }>('/agent/threads')
+      threads.value.unshift({ ...data.thread, running: false })
+      id = data.thread.id
+    }
+    draft.value = ''
+    running.value = true
+    live.value = { text: '', reasoning: '', tools: new Map() }
+    // Start the turn before navigating to a new thread: the route watcher
+    // reloads the thread, sees it running, and attaches — no race with a
+    // load that would report it idle.
     await api.post(`/agent/threads/${id}/turns`, { text })
-    attach(id)
+    if (threadId.value !== id) await router.push(`/assistant/${id}`)
+    else attach(id)
   } catch (e) {
     running.value = false
     live.value = null
@@ -158,11 +165,35 @@ function onEvent(e: AgentEvent) {
       if (m.role === 'tool') l.tools.clear()
       break
     }
+    case 'approval': {
+      const a = e.action as Action
+      if (!actions.value.some((x) => x.id === a.id)) actions.value.push(a)
+      break
+    }
     case 'error':
       bad(String(e.message ?? 'The assistant hit an error'))
       break
   }
   void scrollDown()
+}
+
+/// The operator's decisions on the assistant's actions. Approve and decline
+/// resume the thread, so the stream is re-attached straight away.
+async function decide(a: Action, verb: 'approve' | 'decline' | 'undo') {
+  acting.value = a.id
+  try {
+    const { data } = await api.post<{ action: Action; note?: string }>(`/agent/actions/${a.id}/${verb}`)
+    Object.assign(a, data.action)
+    if (verb === 'undo') ok(data.note ?? 'Undone')
+    else if (threadId.value) {
+      running.value = true
+      attach(threadId.value)
+    }
+  } catch (e) {
+    bad(errorMessage(e))
+  } finally {
+    acting.value = ''
+  }
 }
 
 async function stopTurn() {
@@ -211,6 +242,9 @@ function inputSummary(v: unknown): string {
 }
 const money = (n: number) => (n < 0.01 ? `$${n.toFixed(4)}` : `$${n.toFixed(2)}`)
 
+const actionFor = computed(() => new Map(actions.value.filter((a) => a.callId).map((a) => [a.callId!, a])))
+const TIER_CLS: Record<string, string> = { read: 'text-ink-500', write: 'text-warning-600 bg-warning-50', outward: 'text-danger-700 bg-danger-50' }
+
 /// Stored tool results, keyed by call id, so a call card can show its answer.
 const resultFor = computed(() => {
   const map = new Map<string, ToolResult>()
@@ -227,6 +261,7 @@ watch(
     running.value = false
     thread.value = null
     messages.value = []
+    actions.value = []
     if (id) void loadThread(id)
   },
   { immediate: true },
@@ -305,17 +340,39 @@ onBeforeUnmount(() => stop?.())
                 <p class="mt-1 whitespace-pre-wrap border-l-2 border-line-200 pl-3 italic">{{ m.content.reasoning }}</p>
               </details>
               <div v-if="m.content.text" class="prose-tapis text-[15px] leading-[22px] text-ink-800" v-html="renderMarkdown(m.content.text)" />
-              <div v-for="c in m.content.toolCalls ?? []" :key="c.id" class="rounded-md border border-line-200 bg-surface-0 text-[13px] leading-[18px]">
+              <div
+                v-for="c in m.content.toolCalls ?? []"
+                :key="c.id"
+                class="rounded-md border bg-surface-0 text-[13px] leading-[18px]"
+                :class="actionFor.get(c.id)?.status === 'pending' ? 'border-danger-600/40' : 'border-line-200'"
+              >
                 <button class="flex w-full items-center gap-2 px-3 py-2 text-left" @click="toggle(c.id)">
-                  <Wrench class="size-3.5 shrink-0 text-ink-400" :stroke-width="1.75" />
+                  <ShieldAlert v-if="actionFor.get(c.id)?.tier === 'outward'" class="size-3.5 shrink-0 text-danger-600" :stroke-width="1.75" />
+                  <Wrench v-else class="size-3.5 shrink-0 text-ink-400" :stroke-width="1.75" />
                   <span class="font-medium text-ink-800">{{ c.name }}</span>
-                  <span class="min-w-0 flex-1 truncate text-ink-500">{{ inputSummary(c.input) }}</span>
-                  <template v-if="resultFor.get(c.id)">
+                  <span v-if="actionFor.get(c.id) && actionFor.get(c.id)!.tier !== 'read'" class="rounded-full px-1.5 text-[11px] font-medium uppercase tracking-wide" :class="TIER_CLS[actionFor.get(c.id)!.tier]">{{ actionFor.get(c.id)!.tier }}</span>
+                  <span class="min-w-0 flex-1 truncate text-ink-500">{{ actionFor.get(c.id)?.summary || inputSummary(c.input) }}</span>
+                  <span v-if="actionFor.get(c.id)?.status === 'pending'" class="text-danger-700">needs your approval</span>
+                  <span v-else-if="actionFor.get(c.id)?.status === 'declined'" class="text-ink-500">declined</span>
+                  <span v-else-if="actionFor.get(c.id)?.status === 'undone'" class="text-ink-500">undone</span>
+                  <template v-else-if="resultFor.get(c.id)">
                     <span :class="resultFor.get(c.id)!.isError ? 'text-danger-600' : 'text-ink-500'">{{ resultFor.get(c.id)!.isError ? 'error' : 'ok' }} · <span class="num">{{ resultFor.get(c.id)!.ms }}</span> ms</span>
                   </template>
                   <Loader2 v-else-if="live?.tools.get(c.id) && !live.tools.get(c.id)!.done" class="size-3.5 animate-spin text-ink-400" :stroke-width="2" />
                   <ChevronDown class="size-3.5 shrink-0 text-ink-400 transition-transform" :class="expanded.has(c.id) && 'rotate-180'" :stroke-width="1.75" />
                 </button>
+
+                <!-- An outward call waiting on the operator: the exact thing it would do, and two buttons. -->
+                <div v-if="actionFor.get(c.id)?.status === 'pending'" class="border-t border-danger-600/20 bg-danger-50/40 px-3 py-3">
+                  <p class="text-[14px] leading-5 font-medium text-ink-900">{{ actionFor.get(c.id)!.summary }}</p>
+                  <pre class="mt-2 max-h-60 overflow-auto whitespace-pre-wrap rounded-md border border-line-200 bg-surface-0 px-3 py-2 text-[13px] leading-[18px] text-ink-800">{{ typeof (c.input as any)?.body === 'string' ? (c.input as any).body : pretty(c.input) }}</pre>
+                  <div class="mt-3 flex flex-wrap gap-2">
+                    <BaseButton size="sm" variant="primary" :loading="acting === actionFor.get(c.id)!.id" :disabled="running" @click="decide(actionFor.get(c.id)!, 'approve')"><Check class="size-4" :stroke-width="2" /> Approve</BaseButton>
+                    <BaseButton size="sm" variant="secondary" :disabled="running || acting === actionFor.get(c.id)!.id" @click="decide(actionFor.get(c.id)!, 'decline')">Decline</BaseButton>
+                    <span v-if="running" class="self-center text-[12px] leading-4 text-ink-500">Wait for the assistant to finish its turn.</span>
+                  </div>
+                </div>
+
                 <div v-if="expanded.has(c.id)" class="border-t border-line-100 px-3 py-2">
                   <p class="eyebrow">Input</p>
                   <pre class="mt-1 overflow-x-auto whitespace-pre-wrap text-[12px] leading-4 text-ink-700">{{ pretty(c.input) }}</pre>
@@ -323,6 +380,9 @@ onBeforeUnmount(() => stop?.())
                     <p class="eyebrow mt-3">Result</p>
                     <pre class="mt-1 max-h-72 overflow-auto whitespace-pre-wrap text-[12px] leading-4 text-ink-700">{{ pretty(resultFor.get(c.id)!.output) }}</pre>
                   </template>
+                  <div v-if="actionFor.get(c.id)?.undoable" class="mt-3">
+                    <BaseButton size="sm" variant="secondary" :loading="acting === actionFor.get(c.id)!.id" @click="decide(actionFor.get(c.id)!, 'undo')"><Undo2 class="size-4" :stroke-width="1.75" /> Undo this change</BaseButton>
+                  </div>
                 </div>
               </div>
             </div>
@@ -361,7 +421,7 @@ onBeforeUnmount(() => stop?.())
           />
           <BaseButton variant="primary" :disabled="!draft.trim() || running" aria-label="Send" @click="send"><SendHorizontal class="size-4" :stroke-width="1.75" /></BaseButton>
         </div>
-        <p class="mx-auto mt-1.5 max-w-3xl text-[12px] leading-4 text-ink-500">Enter to send, Shift+Enter for a new line. It reads the data; it does not change anything yet.</p>
+        <p class="mx-auto mt-1.5 max-w-3xl text-[12px] leading-4 text-ink-500">Enter to send, Shift+Enter for a new line. Changes are recorded and can be undone from their card; anything that leaves the box waits for your approval.</p>
       </div>
     </section>
   </div>

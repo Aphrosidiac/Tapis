@@ -15,6 +15,25 @@ export type Tier = 'read' | 'write' | 'outward'
 export interface ToolContext {
   threadId: string
   log: (msg: string) => void
+  /// True when a person approved this exact call (outward tools only run
+  /// this way; the harness never runs them straight from the model).
+  approved: boolean
+}
+
+/// What a write tool hands back: the result the model reads, plus the
+/// before/after the audit keeps and the undo needs.
+export interface Audited {
+  result: unknown
+  before?: unknown
+  after?: unknown
+}
+
+export function audited(result: unknown, before?: unknown, after?: unknown): Audited {
+  return { result, before, after, [AUDITED]: true } as Audited
+}
+export const AUDITED = Symbol('audited')
+export function isAudited(v: unknown): v is Audited {
+  return !!v && typeof v === 'object' && (v as Record<symbol, unknown>)[AUDITED] === true
 }
 
 export interface AgentTool<T extends z.ZodTypeAny = z.ZodTypeAny> {
@@ -23,6 +42,10 @@ export interface AgentTool<T extends z.ZodTypeAny = z.ZodTypeAny> {
   tier: Tier
   schema: T
   run: (input: z.infer<T>, ctx: ToolContext) => Promise<unknown>
+  /// One line for the approval card and the audit: what this call would do.
+  summarize?: (input: z.infer<T>) => string
+  /// Reverses a done call from its audit record. Absent = not undoable.
+  undo?: (action: { input: z.infer<T>; before: unknown; after: unknown }) => Promise<string>
 }
 
 const registry = new Map<string, AgentTool>()

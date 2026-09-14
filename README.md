@@ -306,8 +306,18 @@ tenth of a cent. What makes a cheap model reliable is the harness:
 
 - **Typed, tiered tools.** No shell. Every capability is a dedicated tool
   with a Zod schema; a bad call becomes an error result the model can read,
-  never a crash. `read` tools run freely and in parallel; `write` and
-  `outward` tiers (next phases) are logged with before/after and gated.
+  never a crash. Three tiers:
+  - `read` — runs freely, in parallel.
+  - `write` — items, chats, rules, the team list, everyday settings, the
+    pipeline. Runs, and is recorded in `agent_actions` with what it found
+    and what it left; the card in the transcript has **Undo**, which
+    reverses it from that record.
+  - `outward` — sending WhatsApp, pausing the link, changing models. Never
+    runs from the model. The call is parked as *pending*, the transcript
+    shows the exact thing it would do (for a message: recipient and full
+    text) with **Approve** / **Decline**, and the thread resumes on the
+    decision with a system row recording it. The model is told to say what
+    it asked for and stop; it cannot claim something was sent.
 - **`sql_query`** for the long tail: one read-only `SELECT`, in a read-only
   transaction with a 5s limit and a 200-row cap, over a documented schema
   (`describe_schema`). `users` and `app_settings` are not reachable.
@@ -328,9 +338,8 @@ Every call lands in `llm_calls` as kind `AGENT`; the thread header shows
 tokens and cost. Reasoning is shown behind a disclosure; tool calls are
 cards that open to the exact input and result.
 
-Next: write tools with approval cards and undo, then the memory layer
-(operator preferences, per-client notes, learned procedures, nightly
-consolidation), then evals from real threads.
+Next: the memory layer (operator preferences, per-client notes, learned
+procedures, nightly consolidation), then evals from real threads.
 
 ## Data model
 
@@ -481,6 +490,14 @@ against the same session directory, and never PM2 cluster mode.
 ## Changelog
 
 Newest first. Every entry below was driven by a real account, not a plan.
+
+**The assistant, phase 2** — fourteen write and outward tools. Writes are
+audited with before/after and undoable from their card; outward calls
+(send WhatsApp, send an item, pause/reconnect the link, change models)
+park for approval and resume the thread on the decision. First real run:
+asked to mark an item, set a client name and WhatsApp a developer at a
+given number, it did the two writes and refused the third — the number
+was the business's own linked line — then sent it on explicit approval.
 
 **The assistant, phase 1** — a sidebar chat over the whole system on a
 provider-neutral tool loop (DeepSeek V4 Flash by default), thirteen read

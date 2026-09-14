@@ -172,4 +172,7 @@ login by doing so.
 | POST | `/agent/threads/:id/turns` | `{ text }` → `{ userMessage }`; the work continues in the background. 409 if a turn is already running |
 | POST | `/agent/threads/:id/stop` | aborts the running turn |
 | GET | `/agent/threads/:id/events?since=N` | SSE: `step`, `text`, `reasoning`, `tool_start`, `tool_end`, `message`, `done`, `error`; `idle` when nothing is running. Send the auth header — it is a fetch, not an EventSource — and resume from the last `id` |
+| POST | `/agent/actions/:id/approve` | run a parked outward call; the thread resumes → `{ action }` |
+| POST | `/agent/actions/:id/decline` | `{ reason? }`; the thread resumes |
+| POST | `/agent/actions/:id/undo` | reverse a done write from its audit record → `{ action, note }` |
 | GET | `/agent/tools` | the tools, with tier and description |
