@@ -1,6 +1,7 @@
-import { existsSync, readdirSync, rmSync } from 'fs'
+import { existsSync, readdirSync, rmSync, mkdirSync, writeFileSync } from 'fs'
+import { join } from 'path'
 import { WA_SESSION_DIR, ensureWaSessionDir } from '../paths.js'
-import { parseInbound, jidFor, unwrap, historyChats, type ParsedInbound } from './inbound.js'
+import { parseInbound, jidFor, unwrap, historyChats, personId, type ParsedInbound } from './inbound.js'
 import { handleInbound, discoverChat, rememberContact, applyContactNames } from './ingest.js'
 import prisma from '../prisma.js'
 
@@ -50,6 +51,45 @@ let lastInboundAt: Date | null = null
 let lastOutboundAt: Date | null = null
 let inboundStored = 0
 let inboundIgnored = 0
+
+/// The newest message key seen per chat — from the history sync at pairing
+/// and from every live message, tracked or not. Keys only, never content: an
+/// on-demand history read (below) needs a real message to anchor on, and the
+/// phone ignores a made-up one.
+const newestKey = new Map<string, { id: string; fromMe: boolean; ts: number }>()
+
+function rememberKey(raw: any) {
+  const jid: string | undefined = raw?.key?.remoteJid
+  const id: string | undefined = raw?.key?.id
+  if (!jid || !id) return
+  const seconds = Number(raw.messageTimestamp?.low ?? raw.messageTimestamp ?? 0)
+  const ts = seconds > 0 ? seconds * 1000 : Date.now()
+  const cur = newestKey.get(jid)
+  if (!cur || ts >= cur.ts) newestKey.set(jid, { id, fromMe: !!raw.key.fromMe, ts })
+}
+
+/// Who is in which group, from the group list WhatsApp hands over on
+/// connect. Kept in memory only — an untracked group stores nothing — and
+/// used to suggest which groups to read: the ones your own team is in.
+const groupMembers = new Map<string, Set<string>>()
+
+function rememberMembers(g: any) {
+  if (!g?.id || !Array.isArray(g.participants)) return
+  const ids = new Set<string>()
+  for (const p of g.participants) {
+    const id = personId(p?.id, p?.phoneNumber, p?.jid)
+    if (id) ids.add(id)
+  }
+  groupMembers.set(g.id, ids)
+}
+
+export function membersOf(jid: string): string[] {
+  return [...(groupMembers.get(jid) ?? [])]
+}
+
+export function groupsWith(memberId: string): string[] {
+  return [...groupMembers.entries()].filter(([, m]) => m.has(memberId)).map(([jid]) => jid)
+}
 
 let attempts = 0
 /// Consecutive closes with a code that LOOKS terminal (401, 440). Neither is
@@ -551,6 +591,7 @@ function wireMessages(sock: any) {
   sock.ev.on('messages.upsert', async (payload: any) => {
     touch()
     const messages: any[] = payload?.messages ?? []
+    for (const raw of messages) rememberKey(raw)
 
     // 'append' is history back-fill. It is never fed to the pipeline — it
     // would replay weeks of chat — but the chat identities in it are how a
@@ -611,9 +652,13 @@ function wireDiscovery(sock: any) {
       `history sync: ${payload?.chats?.length ?? 0} chats, ${payload?.contacts?.length ?? 0} contacts, ` +
         `${payload?.messages?.length ?? 0} messages, syncType=${payload?.syncType ?? '?'}, progress=${payload?.progress ?? '?'}, latest=${!!payload?.isLatest}`,
     )
+    for (const raw of payload?.messages ?? []) rememberKey(raw)
     try {
       const found = historyChats(payload)
-      for (const c of found) await discoverChat(c)
+      for (const c of found) {
+        const k = newestKey.get(c.jid)
+        await discoverChat(k ? { ...c, lastKey: { id: k.id, fromMe: k.fromMe } } : c)
+      }
 
       // A contact's name only matters for a chat we already know about; a
       // contact on its own is not a conversation.
@@ -636,6 +681,7 @@ function wireDiscovery(sock: any) {
   const groupEvent = async (groups: any[]) => {
     for (const g of groups ?? []) {
       if (!g?.id) continue
+      rememberMembers(g)
       try {
         await discoverChat({ jid: g.id, name: g.subject ?? null, isGroup: true, participantCount: g.participants?.length ?? null })
       } catch (err) {
@@ -709,6 +755,7 @@ export async function refreshGroups(): Promise<number> {
   let n = 0
   for (const g of Object.values(groups)) {
     if (!g?.id) continue
+    rememberMembers(g)
     await discoverChat({ jid: g.id, name: g.subject ?? null, isGroup: true, participantCount: g.participants?.length ?? null })
     n += 1
   }
@@ -732,6 +779,126 @@ export async function sendText(to: string, body: string): Promise<string | null>
   lastOutboundAt = new Date()
   touch()
   return res?.key?.id ?? null
+}
+
+// ── On-demand history ──────────────────────────────────────────────────────
+
+export interface HistoryMessage {
+  waMessageId: string
+  senderWaId: string
+  senderName: string | null
+  fromMe: boolean
+  type: string
+  text: string | null
+  quotedWaMessageId: string | null
+  sentAt: Date
+  media: { path: string; mime: string } | null
+}
+
+/// Asks the phone for the messages of one chat, newest first, going back as
+/// far as `since`. Nothing here is stored or fed to the pipeline — it is a
+/// read for a human, which is why it lives behind the dev routes.
+///
+/// WhatsApp answers a HISTORY_SYNC_ON_DEMAND request with a
+/// `messaging-history.set` whose syncType is ON_DEMAND, containing messages
+/// older than the anchor (key + timestamp). The first page is anchored on a
+/// synthetic key at "now"; every later page on the oldest message received.
+export async function fetchChatHistory(
+  jid: string,
+  since: Date,
+  opts: { pageSize?: number; maxPages?: number; mediaDir?: string | null } = {},
+): Promise<HistoryMessage[]> {
+  const sock = runtime?.sock
+  const mod = runtime?.mod
+  if (!sock?.ws?.isOpen || !mod) throw new Error('WhatsApp is not connected')
+
+  const pageSize = opts.pageSize ?? 50
+  const maxPages = opts.maxPages ?? 10
+  const out: HistoryMessage[] = []
+  const seen = new Set<string>()
+
+  let known = newestKey.get(jid)
+  if (!known) {
+    // Not seen since the link came up: the chat row remembers the last key.
+    const row = await prisma.chat.findUnique({ where: { jid }, select: { id: true, lastKeyId: true, lastKeyFromMe: true, lastMessageAt: true } })
+    if (row?.lastKeyId) known = { id: row.lastKeyId, fromMe: !!row.lastKeyFromMe, ts: row.lastMessageAt?.getTime() ?? Date.now() }
+    else if (row) {
+      // A tracked chat's newest stored message is as good an anchor.
+      const m = await prisma.message.findFirst({ where: { chatId: row.id, simulated: false }, orderBy: { sentAt: 'desc' }, select: { waMessageId: true, fromMe: true, sentAt: true } })
+      if (m) known = { id: m.waMessageId, fromMe: m.fromMe, ts: m.sentAt.getTime() }
+    }
+  }
+  if (!known) {
+    throw new Error('No message of this chat has been seen yet, so there is nothing to anchor a history read on. It fills in from the next message in the chat.')
+  }
+  // Anchor just after the newest known message so that message is included.
+  let anchor = { remoteJid: jid, id: known.id, fromMe: known.fromMe }
+  let anchorTs = known.ts + 1
+
+  for (let page = 0; page < maxPages; page++) {
+    const raws: any[] = await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        sock.ev.off('messaging-history.set', onSet)
+        reject(new Error('The phone did not answer the history request in time'))
+      }, 20_000)
+      const onSet = (payload: any) => {
+        const ON_DEMAND = mod.proto?.HistorySync?.HistorySyncType?.ON_DEMAND ?? 5
+        if (payload?.syncType !== ON_DEMAND) return
+        clearTimeout(timer)
+        sock.ev.off('messaging-history.set', onSet)
+        resolve((payload?.messages ?? []).filter((m: any) => m?.key?.remoteJid === jid))
+      }
+      sock.ev.on('messaging-history.set', onSet)
+      sock.fetchMessageHistory(pageSize, anchor, anchorTs).catch((err: unknown) => {
+        clearTimeout(timer)
+        sock.ev.off('messaging-history.set', onSet)
+        reject(err)
+      })
+    })
+    logLine(`history on demand: page ${page + 1} of ${jid} returned ${raws.length} message(s)`)
+    if (raws.length === 0) break
+
+    let oldest: any = null
+    for (const raw of raws) {
+      const { parsed } = parseInbound(raw, me)
+      if (!parsed || seen.has(parsed.waMessageId)) continue
+      seen.add(parsed.waMessageId)
+      if (!oldest || parsed.timestamp < oldest.timestamp) oldest = parsed
+      if (parsed.timestamp < since) continue
+
+      let media: HistoryMessage['media'] = null
+      if (opts.mediaDir && parsed.hasMedia && parsed.type !== 'STICKER') {
+        try {
+          const dl = await downloadMedia(sock, mod, parsed)
+          if (dl) {
+            mkdirSync(opts.mediaDir, { recursive: true })
+            const path = join(opts.mediaDir, `${parsed.waMessageId.replace(/[^A-Za-z0-9_-]/g, '_')}.${dl.ext}`)
+            writeFileSync(path, dl.buffer)
+            media = { path, mime: dl.mime }
+          }
+        } catch (err) {
+          logLine(`could not download history media ${parsed.waMessageId}`, err)
+        }
+      }
+      out.push({
+        waMessageId: parsed.waMessageId,
+        senderWaId: parsed.senderWaId,
+        senderName: parsed.senderName,
+        fromMe: parsed.fromMe,
+        type: parsed.type,
+        text: parsed.text,
+        quotedWaMessageId: parsed.quotedWaMessageId,
+        sentAt: parsed.timestamp,
+        media,
+      })
+    }
+    if (!oldest || oldest.timestamp < since) break
+    anchor = { remoteJid: jid, id: oldest.waMessageId, fromMe: oldest.fromMe }
+    anchorTs = oldest.timestamp.getTime()
+  }
+
+  out.sort((a, b) => a.sentAt.getTime() - b.sentAt.getTime())
+  return out
 }
 
 // ── Stopping and unlinking ─────────────────────────────────────────────────

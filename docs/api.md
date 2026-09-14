@@ -62,6 +62,10 @@ interesting part.
 | GET | `/chats/:id` | chat with rules, participants and message counts |
 | PUT | `/chats/:id` | `{ tracked?, clientName?, description?, name? }` |
 | GET | `/chats/:id/messages` | `?status=&q=&page=&limit=` |
+| GET | `/chats/suggested` | untracked groups worth reading, ranked (team present, active, small) |
+| POST | `/chats/:id/setup-draft` | `{ peek? }` → `{ draft }`: client, description, rules, team, from stored messages or a phone peek |
+| POST | `/chats/:id/setup` | `{ clientName?, description?, rules[], team[] }` applies it all and switches the chat on |
+| GET | `/dev/history` | one chat's recent messages straight from the phone (dev/simulation only; best effort) |
 | POST | `/messages/:id/read-media` | transcribe / describe the message's media again → `{ message }` |
 | POST | `/messages/:id/translate` | render the message's Chinese text / reading into the output language again → `{ message }` |
 | GET | `/team` | every sender seen across chats, with `team` flags → `{ people, count }` |

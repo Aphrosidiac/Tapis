@@ -23,6 +23,9 @@ export interface DiscoveredChat {
   isGroup: boolean
   participantCount?: number | null
   lastMessageAt?: Date | null
+  /// The message this discovery came from, so a later history read can
+  /// anchor on it even after a restart.
+  lastKey?: { id: string; fromMe: boolean } | null
 }
 
 /// Remembers a saved contact name, and gives it to the chat if one exists.
@@ -80,6 +83,7 @@ export async function discoverChat(d: DiscoveredChat) {
         participantCount: d.participantCount ?? null,
         lastSeenAt: new Date(),
         lastMessageAt: d.lastMessageAt ?? null,
+        ...(d.lastKey ? { lastKeyId: d.lastKey.id, lastKeyFromMe: d.lastKey.fromMe } : {}),
       },
     })
   }
@@ -91,7 +95,7 @@ export async function discoverChat(d: DiscoveredChat) {
       lastSeenAt: new Date(),
       ...(d.participantCount !== undefined && d.participantCount !== null ? { participantCount: d.participantCount } : {}),
       ...(d.lastMessageAt && (!existing.lastMessageAt || d.lastMessageAt > existing.lastMessageAt)
-        ? { lastMessageAt: d.lastMessageAt }
+        ? { lastMessageAt: d.lastMessageAt, ...(d.lastKey ? { lastKeyId: d.lastKey.id, lastKeyFromMe: d.lastKey.fromMe } : {}) }
         : {}),
     },
   })
@@ -114,6 +118,7 @@ export async function handleInbound(parsed: ParsedInbound, download?: MediaDownl
     name: parsed.isGroup ? null : parsed.fromMe ? null : parsed.senderName,
     isGroup: parsed.isGroup,
     lastMessageAt: parsed.timestamp,
+    lastKey: { id: parsed.waMessageId, fromMe: parsed.fromMe },
   })
 
   if (!chat.tracked) {

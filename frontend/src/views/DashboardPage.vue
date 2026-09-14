@@ -8,7 +8,7 @@ import { ago, usd, STATUS_LABEL, STATUS_TONE, PRIORITY_TONE } from '../lib/forma
 import BaseBadge from '../components/base/BaseBadge.vue'
 import BaseButton from '../components/base/BaseButton.vue'
 import EmptyState from '../components/base/EmptyState.vue'
-import { MessageSquareText, Send, Search, MessageCircleQuestion, Hourglass, Flame, CheckCircle2, CircleCheckBig, X } from 'lucide-vue-next'
+import { MessageSquareText, Send, Search, MessageCircleQuestion, Hourglass, Flame, CheckCircle2, CircleCheckBig, X, Circle } from 'lucide-vue-next'
 
 interface Item {
   id: string
@@ -35,6 +35,7 @@ interface Triage {
   ready: Bucket & { by: string[] }
 }
 interface Dash {
+  setup: { link: boolean; key: boolean; chats: boolean; team: boolean; operator: boolean }
   items: Record<string, number>
   triage: Triage
   trackedChats: number
@@ -117,6 +118,18 @@ const groups = computed(() => {
   return [...map.values()].sort((a, b) => a.label.localeCompare(b.label))
 })
 
+/// Five things that make the product work, in the order to do them. The
+/// list disappears once they are all done.
+const STEPS = [
+  { key: 'link' as const, label: 'Link WhatsApp', hint: 'Scan the code on the WhatsApp link screen', to: '/whatsapp' },
+  { key: 'key' as const, label: 'Add a model key', hint: 'OpenRouter or Anthropic, on Settings', to: '/settings' },
+  { key: 'chats' as const, label: 'Set up a chat', hint: 'Switch a client group on — it drafts the context and rules for you', to: '/chats' },
+  { key: 'team' as const, label: 'Mark your team', hint: 'So their replies count as your side, not as requests', to: '/settings' },
+  { key: 'operator' as const, label: 'Your own number', hint: 'For the morning brief and talking to the assistant from your phone', to: '/settings' },
+]
+const setupLeft = computed(() => (dash.value ? STEPS.filter((s) => !dash.value!.setup[s.key]) : []))
+const setupDone = computed(() => (dash.value ? STEPS.filter((s) => dash.value!.setup[s.key]).length : 0))
+
 const openCount = computed(() => (dash.value?.items.NEW ?? 0) + (dash.value?.items.IN_PROGRESS ?? 0))
 
 const CARDS = [
@@ -182,6 +195,23 @@ function groupAge(items: Item[]): string {
 
 <template>
   <div class="rise">
+    <section v-if="dash && setupLeft.length" class="card mb-5 overflow-hidden">
+      <div class="flex items-center justify-between gap-3 border-b border-line-100 px-5 py-3">
+        <p class="text-[14px] font-medium leading-5 text-ink-900">Getting started</p>
+        <p class="text-[13px] leading-[18px] text-ink-500"><span class="num">{{ setupDone }}</span> of {{ STEPS.length }} done</p>
+      </div>
+      <div class="divide-y divide-line-100">
+        <RouterLink v-for="s in STEPS" :key="s.key" :to="s.to" class="flex items-center gap-3 px-5 py-2.5 hover:bg-surface-50" :class="dash.setup[s.key] && 'opacity-60'">
+          <CheckCircle2 v-if="dash.setup[s.key]" class="size-4 shrink-0 text-success-600" :stroke-width="1.75" />
+          <Circle v-else class="size-4 shrink-0 text-ink-300" :stroke-width="1.75" />
+          <span class="min-w-0 flex-1">
+            <span class="block text-[14px] leading-5" :class="dash.setup[s.key] ? 'text-ink-500 line-through' : 'text-ink-900'">{{ s.label }}</span>
+            <span v-if="!dash.setup[s.key]" class="block truncate text-[13px] leading-[18px] text-ink-500">{{ s.hint }}</span>
+          </span>
+        </RouterLink>
+      </div>
+    </section>
+
     <!-- Triage, not statistics. Each card is a question an owner actually
          has, and each one is a filter you can click. The counts that used to
          live up here (tracked chats, model cost, how much was dismissed) are

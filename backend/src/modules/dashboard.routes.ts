@@ -111,7 +111,18 @@ export default async function dashboardRoutes(app: FastifyInstance) {
     }
 
     const link = baileysStatus()
+    // The first-run checklist: five things that make the product work, in
+    // order. Shown on the dashboard until all are done.
+    const [teamCount, chatsWithRules] = await Promise.all([prisma.teamMember.count(), prisma.chat.count({ where: { tracked: true, rules: { some: { active: true } } } })])
+    const setup = {
+      link: link.ready,
+      key: llmConfigured(),
+      chats: chatsWithRules > 0,
+      team: teamCount > 0,
+      operator: !!settings().operatorWaId,
+    }
     return {
+      setup,
       items: counts,
       triage,
       trackedChats,

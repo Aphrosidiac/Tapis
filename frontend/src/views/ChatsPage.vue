@@ -9,9 +9,9 @@ import { useLinkStore } from '../stores/link'
 import PageHeader from '../components/base/PageHeader.vue'
 import BaseToggle from '../components/base/BaseToggle.vue'
 import BaseButton from '../components/base/BaseButton.vue'
-import BaseBadge from '../components/base/BaseBadge.vue'
 import EmptyState from '../components/base/EmptyState.vue'
-import { Users, User, RefreshCw, Search, MessagesSquare, Contact } from 'lucide-vue-next'
+import { Users, User, RefreshCw, Search, MessagesSquare, Contact, Sparkles } from 'lucide-vue-next'
+import SetupSheet from '../components/SetupSheet.vue'
 
 interface Chat {
   id: string
@@ -50,7 +50,7 @@ async function load() {
     loading.value = false
   }
 }
-usePolling(load, 20_000)
+usePolling(() => { void load(); void loadSuggested() }, 20_000)
 
 const filtered = computed(() =>
   chats.value.filter((c) => {
@@ -63,14 +63,36 @@ const filtered = computed(() =>
 )
 const trackedCount = computed(() => chats.value.filter((c) => c.tracked).length)
 
+interface Suggested { id: string; name: string; participantCount: number | null; lastMessageAt: string | null; why: string }
+const suggested = ref<Suggested[]>([])
+async function loadSuggested() {
+  try {
+    const { data } = await api.get<{ chats: Suggested[] }>('/chats/suggested')
+    suggested.value = data.chats
+  } catch {
+    /* a suggestion strip that fails to load is just absent */
+  }
+}
+
+/// Switching a chat on opens the setup, already drafted. Switching it off
+/// is just off.
+const setup = ref<{ id: string; name: string; tracked?: boolean } | null>(null)
 async function toggle(c: Chat, tracked: boolean) {
+  if (tracked) {
+    setup.value = { id: c.id, name: c.name, tracked: false }
+    return
+  }
   try {
     await api.put(`/chats/${c.id}`, { tracked })
     c.tracked = tracked
-    ok(tracked ? `Reading "${c.name}" from now on` : `Stopped reading "${c.name}"`)
+    ok(`Stopped reading "${c.name}"`)
   } catch (e) {
     bad(errorMessage(e))
   }
+}
+async function setupDone() {
+  setup.value = null
+  await Promise.all([load(), loadSuggested()])
 }
 
 /// The saved names ride WhatsApp's app-state sync, which only runs at
@@ -124,6 +146,26 @@ const FILTERS = [
         </BaseButton>
       </template>
     </PageHeader>
+
+    <!-- Groups your team is already in, and that talk: the ones worth
+         reading, with the setup one click away. Gone once they are read. -->
+    <section v-if="suggested.length" class="card mb-5 overflow-hidden">
+      <div class="flex items-center gap-2 border-b border-line-100 px-5 py-3">
+        <Sparkles class="size-4 text-primary-600" :stroke-width="1.75" />
+        <p class="text-[14px] font-medium leading-5 text-ink-900">Worth reading</p>
+        <p class="text-[13px] leading-[18px] text-ink-500">Groups your team is in. Set one up in a minute — it drafts the context and rules from the last few days.</p>
+      </div>
+      <div class="divide-y divide-line-100">
+        <div v-for="c in suggested" :key="c.id" class="flex items-center gap-3 px-5 py-2.5">
+          <Users class="size-4 shrink-0 text-ink-400" :stroke-width="1.5" />
+          <div class="min-w-0 flex-1">
+            <p class="truncate text-[14px] leading-5 text-ink-900">{{ c.name }}</p>
+            <p class="truncate text-[13px] leading-[18px] text-ink-500">{{ c.why }}{{ c.participantCount ? ` · ${c.participantCount} members` : '' }}{{ c.lastMessageAt ? ` · ${ago(c.lastMessageAt)}` : '' }}</p>
+          </div>
+          <BaseButton size="sm" variant="primary" @click="setup = { id: c.id, name: c.name, tracked: false }">Set up</BaseButton>
+        </div>
+      </div>
+    </section>
 
     <div class="mb-4 flex flex-wrap items-center gap-3">
       <div class="flex gap-1 rounded-md border border-line-200 bg-surface-0 p-1">
@@ -184,7 +226,7 @@ const FILTERS = [
           </RouterLink>
           <span class="hidden truncate text-[14px] leading-5 text-ink-600 md:block">{{ c.clientName || '—' }}</span>
           <span class="num hidden text-right text-[14px] leading-5 md:block">
-            <BaseBadge v-if="c.tracked && !c.counts.rules" tone="warn">no rules</BaseBadge>
+            <button v-if="c.tracked && !c.counts.rules" class="rounded-sm text-[13px] font-medium text-primary-700 hover:underline" @click="setup = { id: c.id, name: c.name, tracked: true }">set up</button>
             <template v-else>{{ c.counts.rules }}</template>
           </span>
           <span class="num hidden text-right text-[14px] leading-5 md:block">{{ c.counts.items }}</span>
@@ -193,5 +235,6 @@ const FILTERS = [
       </div>
       <p v-if="!filtered.length" class="px-5 py-10 text-center text-[14px] leading-5 text-ink-500">No chats match.</p>
     </div>
-  </div>
+    <SetupSheet :show="!!setup" :chat="setup" @close="setup = null" @done="setupDone" />
+</div>
 </template>

@@ -6,6 +6,7 @@ import { tick } from '../lib/pipeline/scheduler.js'
 import { rereadMedia } from '../lib/llm/media.js'
 import { isTeam } from '../lib/team.js'
 import { translateOne } from '../lib/llm/translate.js'
+import { draftSetup, applySetup, suggestedChats } from '../lib/setup.js'
 
 const RULE_FIELDS = { id: true, chatId: true, text: true, extraAsk: true, senderWaIds: true, toDashboard: true, toWhatsapp: true, active: true, createdAt: true, updatedAt: true }
 
@@ -56,6 +57,39 @@ export default async function chatRoutes(app: FastifyInstance) {
     })
     const total = await prisma.chat.count()
     return { chats: chats.map((c) => ({ ...c, counts: c._count, _count: undefined })), total }
+  })
+
+  /// Untracked groups worth reading, ranked. Before the :id route, or the
+  /// word "suggested" would be taken for an id.
+  app.get('/api/chats/suggested', async () => ({ chats: await suggestedChats() }))
+
+  /// A drafted setup for one chat: peeks at the last days on the phone
+  /// (nothing stored), then a cheap model writes what the operator would
+  /// have typed. `?peek=false` drafts from the name and people alone.
+  app.post('/api/chats/:id/setup-draft', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const peek = bool((request.body as Record<string, unknown> | undefined)?.peek, true)
+    try {
+      return { draft: await draftSetup(id, { peek }) }
+    } catch (err) {
+      const e = err as Error & { statusCode?: number }
+      return reply.status(e.statusCode ?? 500).send({ error: e.message })
+    }
+  })
+
+  /// Applies a setup in one go and switches the chat on.
+  app.post('/api/chats/:id/setup', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = (request.body ?? {}) as Record<string, unknown>
+    const rules = Array.isArray(b.rules) ? (b.rules as Record<string, unknown>[]).map((r) => ({ text: str(r.text), toWhatsapp: strArray(r.toWhatsapp) })) : []
+    const team = Array.isArray(b.team) ? (b.team as Record<string, unknown>[]).map((t) => ({ waId: str(t.waId), name: strOrNull(t.name) })) : []
+    try {
+      const chat = await applySetup(id, { clientName: b.clientName === undefined ? undefined : strOrNull(b.clientName), description: b.description === undefined ? undefined : strOrNull(b.description), rules, team })
+      return { chat }
+    } catch (err) {
+      const e = err as Error & { statusCode?: number }
+      return reply.status(e.statusCode ?? 500).send({ error: e.message })
+    }
   })
 
   app.get('/api/chats/:id', async (request, reply) => {

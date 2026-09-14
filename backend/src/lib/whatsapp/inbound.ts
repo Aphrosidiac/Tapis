@@ -95,7 +95,7 @@ function digitsOf(jid: unknown): string | null {
 }
 
 /// The identity for a person: number when available, else `lid:` + LID.
-function personId(primary: unknown, ...pnCandidates: unknown[]): string | null {
+export function personId(primary: unknown, ...pnCandidates: unknown[]): string | null {
   for (const c of pnCandidates) {
     const d = digitsOf(c)
     if (d) return d

@@ -6,6 +6,7 @@ import { simulationAllowed } from '../lib/settings.js'
 import { handleInbound } from '../lib/whatsapp/ingest.js'
 import { tick } from '../lib/pipeline/scheduler.js'
 import { str, bool, waDigits } from '../lib/input.js'
+import { fetchChatHistory } from '../lib/whatsapp/baileys.js'
 import { MEDIA_DIR } from '../lib/paths.js'
 import { join, resolve, sep, basename } from 'path'
 
@@ -90,5 +91,32 @@ export default async function devRoutes(app: FastifyInstance) {
     reply.header('X-Content-Type-Options', 'nosniff')
     reply.header('Cache-Control', 'private, max-age=3600')
     return reply.send(createReadStream(m.mediaPath))
+  })
+  /// Reads one chat's recent messages straight from the phone. A one-off
+  /// read for a person, not an ingest: nothing lands in the database or the
+  /// pipeline, and media goes to a scratch folder under media/history.
+  app.get('/api/dev/history', async (request, reply) => {
+    if (!simulationAllowed()) return reply.status(403).send({ error: 'Developer tools are switched off. Enable simulation on the Settings screen.' })
+    const q = (request.query ?? {}) as Record<string, unknown>
+    let jid = str(q.jid)
+    if (q.chatId) {
+      const chat = await prisma.chat.findUnique({ where: { id: str(q.chatId) } })
+      if (!chat) return reply.status(404).send({ error: 'Chat not found' })
+      jid = chat.jid
+    }
+    if (!jid) return reply.status(400).send({ error: 'Pass chatId or jid' })
+    const days = Math.min(Math.max(Number(q.days) || 3, 1), 30)
+    const since = new Date(Date.now() - days * 86_400_000)
+    const withMedia = bool(q.media, true)
+    try {
+      const messages = await fetchChatHistory(jid, since, {
+        pageSize: Math.min(Number(q.pageSize) || 50, 200),
+        maxPages: Math.min(Number(q.maxPages) || 10, 40),
+        mediaDir: withMedia ? join(MEDIA_DIR, 'history', jid.replace(/[^a-z0-9]/gi, '_')) : null,
+      })
+      return { jid, since, count: messages.length, messages }
+    } catch (err) {
+      return reply.status(409).send({ error: err instanceof Error ? err.message : String(err) })
+    }
   })
 }

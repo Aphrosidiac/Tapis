@@ -69,6 +69,10 @@ model Chat {
   trackedSince DateTime? @map("tracked_since")
   participantCount Int? @map("participant_count")
   lastMessageAt DateTime? @map("last_message_at")
+  /// The newest message key seen in this chat, on any day: what an
+  /// on-demand history read anchors on. Keys only, never content.
+  lastKeyId     String?   @map("last_key_id")
+  lastKeyFromMe Boolean?  @map("last_key_from_me")
   lastSeenAt    DateTime  @default(now()) @map("last_seen_at")
   createdAt     DateTime  @default(now()) @map("created_at")
 

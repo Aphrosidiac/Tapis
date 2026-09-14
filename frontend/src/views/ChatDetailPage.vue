@@ -16,7 +16,8 @@ import BaseButton from '../components/base/BaseButton.vue'
 import BaseBadge from '../components/base/BaseBadge.vue'
 import BaseSelect from '../components/base/BaseSelect.vue'
 import RuleModal, { type Rule } from '../components/RuleModal.vue'
-import { ArrowLeft, Plus, Pencil, Trash2, Play, User, LifeBuoy } from 'lucide-vue-next'
+import { ArrowLeft, Plus, Pencil, Trash2, Play, User, LifeBuoy, Sparkles } from 'lucide-vue-next'
+import SetupSheet from '../components/SetupSheet.vue'
 
 interface Participant { waId: string; name: string | null; messageCount: number; lastSeenAt: string; team?: boolean }
 interface Chat {
@@ -74,7 +75,8 @@ const sim = reactive({ senderName: '', senderWaId: '', text: '' })
 
 const id = route.params.id as string
 
-async function load() {
+const setupOpen = ref(false)
+async function load(refill = false) {
   try {
     const [c, m, s] = await Promise.all([
       api.get<{ chat: Chat }>(`/chats/${id}`),
@@ -86,7 +88,10 @@ async function load() {
     messages.value = m.data.messages
     msgTotal.value = m.data.total
     simulationAllowed.value = s.data.settings.simulationAllowed
-    if (first) {
+    // The form is filled once, so polling never overwrites an edit in
+    // progress — except after a setup saved from the sheet, which is new
+    // context the form must show.
+    if (first || refill) {
       ctx.clientName = chat.value.clientName ?? ''
       ctx.description = chat.value.description ?? ''
       ctx.name = chat.value.name
@@ -95,9 +100,9 @@ async function load() {
     bad(errorMessage(e))
   }
 }
-onMounted(load)
-usePolling(load, 15_000)
-watch(msgFilter, load)
+onMounted(() => load())
+usePolling(() => load(), 15_000)
+watch(msgFilter, () => load())
 
 async function saveContext() {
   busy.value = 'ctx'
@@ -243,7 +248,8 @@ async function toggleTeam(p: Participant) {
               :rows="4"
               placeholder="e.g. Custom ERP project. Modules: sales, purchasing, inventory. Ahmad is the client's PM; Mei Ling is our lead."
             />
-            <div class="flex justify-end">
+            <div class="flex flex-wrap items-center justify-end gap-2">
+              <BaseButton variant="secondary" @click="setupOpen = true"><Sparkles class="size-4 text-primary-600" :stroke-width="1.75" /> Draft from the chat</BaseButton>
               <BaseButton variant="primary" :disabled="!dirty" :loading="busy === 'ctx'" @click="saveContext">Save context</BaseButton>
             </div>
           </div>
@@ -374,5 +380,6 @@ async function toggleTeam(p: Participant) {
     </div>
 
     <RuleModal :show="ruleModal" :chat-id="chat.id" :rule="editing" :participants="participantsForRule" @close="ruleModal = false" @saved="onSaved" />
-  </div>
+    <SetupSheet :show="setupOpen" :chat="chat ? { id: chat.id, name: chat.name, tracked: chat.tracked } : null" @close="setupOpen = false" @done="() => { setupOpen = false; void load(true) }" />
+</div>
 </template>

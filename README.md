@@ -108,8 +108,20 @@ cd frontend && npm install && npm run dev   # UI on :5140, proxies /api
 Open <http://localhost:5140>. The first visit creates the operator account —
 there is no seeded default password to forget to change.
 
-Then: add a model key on **Settings**, link WhatsApp on **WhatsApp link**,
-switch on chats and write rules on **Chats & rules**.
+Then follow the **Getting started** list on the dashboard: link WhatsApp,
+add a model key, set up a chat, mark your team, add your own number. It
+disappears when everything is done.
+
+Setting up a chat is one sheet, not a form to fill from memory. **Chats &
+rules** opens with *Worth reading* — the groups your team is already in and
+that talk — and switching any chat on opens the sheet already drafted: the
+client's name, a description, the rules this chat actually needs, and who
+on your side is in it, written by the filter model from the chat's recent
+messages (stored ones for a chat being read; a one-off ask to the phone for
+one that is not, which many phones never answer — then it drafts from the
+name). Untick what you do not want, edit what is wrong, press **Start
+reading**. A chat already being read has **Draft from the chat** on its
+context card.
 
 ### Working without an account or credit
 
@@ -524,6 +536,14 @@ against the same session directory, and never PM2 cluster mode.
 ## Changelog
 
 Newest first. Every entry below was driven by a real account, not a plan.
+
+**Setup without the typing** — a Getting-started list on the dashboard; a
+*Worth reading* strip of groups your team is in; and a setup sheet that
+opens drafted — client, description, rules, team — from the chat's own
+messages, applied in one click. The on-demand history read for untracked
+chats is best-effort: the phone here never answered a peer-data request
+("phone possibly offline" in Baileys' own log), so the name-only fallback
+matters.
 
 **Ready to close** — our side's messages now go through the filter for what
 they tell the client, attach as TEAM_UPDATE, and set the item's teamStatus.
