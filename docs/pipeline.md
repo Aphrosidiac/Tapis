@@ -54,6 +54,15 @@ could not be read. Switching a reading off in Settings leaves the message
 `POST /api/messages/:id/read-media` is that button. Calls are recorded in
 `llm_calls` as kind `MEDIA` and priced like the rest.
 
+## Whose side
+
+`lib/team.ts` keeps the roster in memory. At ingest a message from a team
+member is stored `SKIPPED` / "Sent by our team", exactly like `fromMe`; in
+`prompts.ts` `senderLabel` appends `[our team]`; both system prompts say a
+team member's words are context and commitments, never requests. The chat
+description remains the place to say anything subtler ("Sharon is the
+client's accountant").
+
 ## First pass — the filter
 
 Cheap model. One decision per message: could this be part of something a rule

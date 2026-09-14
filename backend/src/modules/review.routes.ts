@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import prisma from '../lib/prisma.js'
 import { authenticate } from '../middleware/auth.js'
+import { isTeam } from '../lib/team.js'
 import { int } from '../lib/input.js'
 import { rescueMessage, retryBundle } from '../lib/pipeline/bundle.js'
 
@@ -27,7 +28,7 @@ export default async function reviewRoutes(app: FastifyInstance) {
       }),
       prisma.message.count({ where }),
     ])
-    return { messages, total, page, limit }
+    return { messages: messages.map((m) => ({ ...m, team: isTeam(m.senderWaId) })), total, page, limit }
   })
 
   app.post('/api/review/rescue/:messageId', async (request, reply) => {

@@ -22,6 +22,7 @@ interface Msg {
   text: string | null
   sentAt: string
   filterReason: string | null
+  team?: boolean
   mediaPath?: string | null
   mediaText?: string | null
   mediaTextStatus?: string
@@ -163,6 +164,7 @@ const STATUS_TONE: Record<string, 'ok' | 'bad' | 'warn' | 'info'> = { DONE: 'ok'
           <div class="min-w-0 flex-1">
             <div class="flex flex-wrap items-center gap-x-2 text-[13px] leading-[18px] text-ink-500">
               <span class="font-medium text-ink-900">{{ senderOf(m) }}</span>
+              <BaseBadge v-if="m.team" tone="accent">our team</BaseBadge>
               <RouterLink :to="`/chats/${m.chat.id}`" class="hover:text-ink-900">
                 {{ m.chat.clientName ? `${m.chat.clientName} · ` : '' }}{{ m.chat.name }}
               </RouterLink>

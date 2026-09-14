@@ -12,6 +12,7 @@ import BaseSelect from '../components/base/BaseSelect.vue'
 import BaseToggle from '../components/base/BaseToggle.vue'
 import BaseButton from '../components/base/BaseButton.vue'
 import BaseBadge from '../components/base/BaseBadge.vue'
+import TeamCard from '../components/TeamCard.vue'
 
 interface KeyView { configured: boolean; source: string; hint: string }
 interface Settings {
@@ -236,6 +237,8 @@ const PROVIDERS = computed(() => [
             </span>
           </label>
         </Card>
+
+        <TeamCard />
 
         <Card title="Your account">
           <div class="space-y-4">

@@ -17,7 +17,7 @@ import BaseSelect from '../components/base/BaseSelect.vue'
 import RuleModal, { type Rule } from '../components/RuleModal.vue'
 import { ArrowLeft, Plus, Pencil, Trash2, Play, User, LifeBuoy } from 'lucide-vue-next'
 
-interface Participant { waId: string; name: string | null; messageCount: number; lastSeenAt: string }
+interface Participant { waId: string; name: string | null; messageCount: number; lastSeenAt: string; team?: boolean }
 interface Chat {
   id: string
   jid: string
@@ -44,6 +44,7 @@ interface Msg {
   filterStatus: string
   filterReason: string | null
   simulated: boolean
+  team?: boolean
   mediaPath?: string | null
   mediaText?: string | null
   mediaTextStatus?: string
@@ -188,6 +189,18 @@ const MSG_FILTERS = [
   { value: 'PENDING', label: 'Waiting' },
   { value: 'SKIPPED', label: 'Ours' },
 ]
+async function toggleTeam(p: Participant) {
+  busy.value = `team-${p.waId}`
+  try {
+    await api.put(`/team/${encodeURIComponent(p.waId)}`, { team: !p.team, name: p.name })
+    p.team = !p.team
+    ok(p.team ? `${p.name || p.waId} marked as your team, in every chat` : `${p.name || p.waId} is no longer marked as team`)
+  } catch (e) {
+    bad(errorMessage(e))
+  } finally {
+    busy.value = ''
+  }
+}
 </script>
 
 <template>
@@ -273,18 +286,24 @@ const MSG_FILTERS = [
           </div>
         </Card>
 
-        <Card title="People in this chat" sub="Learned from who has spoken since tracking began. A rule can be limited to any of them.">
+        <Card title="People in this chat" sub="Learned from who has spoken since tracking began. A rule can be limited to any of them. Click a person to mark them as your team — that applies in every chat.">
           <p v-if="!chat.participants.length" class="text-[14px] leading-5 text-ink-500">Nobody yet.</p>
           <div class="flex flex-wrap gap-1.5">
-            <span
+            <button
               v-for="p in chat.participants"
               :key="p.waId"
-              class="inline-flex items-center gap-2 rounded-full border border-line-200 bg-surface-50 px-3 py-1 text-[13px] leading-5 text-ink-700"
+              type="button"
+              class="inline-flex min-h-8 items-center gap-2 rounded-full border px-3 py-1 text-[13px] leading-5 transition-colors"
+              :class="p.team ? 'border-primary-200 bg-primary-50 text-primary-800' : 'border-line-200 bg-surface-50 text-ink-700 hover:border-ink-300'"
+              :disabled="busy === `team-${p.waId}`"
+              :title="p.team ? 'On your team — click to unmark' : 'Click to mark as your team'"
+              @click="toggleTeam(p)"
             >
-              <User class="size-3.5 text-ink-400" :stroke-width="1.5" />
+              <User class="size-3.5" :class="p.team ? 'text-primary-600' : 'text-ink-400'" :stroke-width="1.5" />
               {{ p.name || (p.waId.startsWith('lid:') ? 'Unknown contact' : '+' + p.waId) }}
-              <span class="num text-ink-500">{{ p.messageCount }}</span>
-            </span>
+              <span v-if="p.team" class="text-[12px] font-medium uppercase tracking-wide text-primary-700">team</span>
+              <span class="num" :class="p.team ? 'text-primary-600' : 'text-ink-500'">{{ p.messageCount }}</span>
+            </button>
           </div>
         </Card>
 
@@ -316,6 +335,7 @@ const MSG_FILTERS = [
           <div v-for="m in messages" :key="m.id" class="px-6 py-3">
             <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] leading-[18px] text-ink-500">
               <span class="font-medium text-ink-900">{{ senderOf(m) }}</span>
+              <BaseBadge v-if="m.team" tone="accent">our team</BaseBadge>
               <span>{{ fmtDateTime(m.sentAt) }}</span>
               <BaseBadge :tone="FILTER_TONE[m.filterStatus]">{{ FILTER_LABEL[m.filterStatus] }}</BaseBadge>
               <BaseBadge v-if="m.simulated" tone="neutral">simulated</BaseBadge>

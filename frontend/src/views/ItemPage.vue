@@ -22,6 +22,7 @@ interface Msg {
   type: string
   text: string | null
   mediaPath: string | null
+  team?: boolean
   mediaText?: string | null
   mediaTextStatus?: string
   mediaTextError?: string | null
@@ -145,6 +146,7 @@ function patchMessage(target: { id: string } & Record<string, unknown>, u: Media
             <div v-for="m in item.messages" :key="m.id" class="px-6 py-4">
               <div class="flex flex-wrap items-center gap-2 text-[13px] leading-[18px] text-ink-500">
                 <span class="font-medium text-ink-900">{{ senderOf(m) }}</span>
+                <BaseBadge v-if="m.team" tone="accent">our team</BaseBadge>
                 <span>{{ fmtDateTime(m.sentAt) }}</span>
                 <BaseBadge :tone="KIND_TONE[m.link.kind]">{{ KIND[m.link.kind] }}</BaseBadge>
               </div>

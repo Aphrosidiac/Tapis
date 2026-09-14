@@ -210,6 +210,21 @@ A batch is cut for a chat when **any** of these is true:
 Plus `manual` (**Run now**) and `rescue` (one rescued message, straight to
 analysis).
 
+### Whose side is talking
+
+The models are told who is on the business's side, and they are told by a
+list, not by guessing. **Settings → Your team** shows every sender the link
+has seen across the tracked chats — name, number, how many of your groups
+they are in — with a switch; the same switch is on each chat's people list.
+It keys on the sender id the link actually saw (a number, or the `lid:` id
+of a sender that never carried one), never on a name.
+
+A team member's message is stored like the linked phone's own: `SKIPPED`,
+"Sent by our team", context for both passes and never a candidate. In the
+transcript they read `Noel [our team]`, and the analysis prompt says what
+that means: "I will add that button" from your side is a commitment, not a
+client asking for a button — attach it, do not open an item for it.
+
 ### Reading the media first
 
 Before a bundle is judged, every voice note in it is **transcribed** and every

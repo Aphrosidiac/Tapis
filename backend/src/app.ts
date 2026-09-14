@@ -6,6 +6,7 @@ import fastifyStatic from '@fastify/static'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import { loadSettings } from './lib/settings.js'
+import { loadTeam } from './lib/team.js'
 import { ensureDirs } from './lib/paths.js'
 import { setBaileysLogger, start as startWhatsApp, stop as stopWhatsApp } from './lib/whatsapp/baileys.js'
 import { setIngestLogger } from './lib/whatsapp/ingest.js'
@@ -19,6 +20,7 @@ import settingsRoutes from './modules/settings.routes.js'
 import dashboardRoutes from './modules/dashboard.routes.js'
 import noticeRoutes from './modules/notices.routes.js'
 import devRoutes from './modules/dev.routes.js'
+import teamRoutes from './modules/team.routes.js'
 
 export interface BuildOptions {
   /// Connect the WhatsApp link and run the pipeline. Only the one serving
@@ -50,6 +52,7 @@ export async function buildApp(opts: BuildOptions = {}) {
 
   ensureDirs()
   await loadSettings()
+  await loadTeam()
 
   const log = (msg: string, err?: unknown) => (err ? app.log.warn({ err }, msg) : app.log.info(msg))
   setBaileysLogger(log)
@@ -65,6 +68,7 @@ export async function buildApp(opts: BuildOptions = {}) {
   await app.register(dashboardRoutes)
   await app.register(noticeRoutes)
   await app.register(devRoutes)
+  await app.register(teamRoutes)
 
   // The built frontend, when it exists. Any non-API path is the SPA.
   const dist = join(process.cwd(), '..', 'frontend', 'dist')

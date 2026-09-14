@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import prisma from '../lib/prisma.js'
 import { authenticate } from '../middleware/auth.js'
+import { isTeam } from '../lib/team.js'
 import { str, int, waDigits, isUsableWaId } from '../lib/input.js'
 import { formatNewItem } from '../lib/pipeline/deliver.js'
 
@@ -93,7 +94,7 @@ export default async function itemRoutes(app: FastifyInstance) {
       item: {
         ...item,
         rules: item.rules.map((r) => r.rule),
-        messages: item.messages.map((l) => ({ link: { id: l.id, kind: l.kind, note: l.note }, ...l.message })),
+        messages: item.messages.map((l) => ({ link: { id: l.id, kind: l.kind, note: l.note }, ...l.message, team: isTeam(l.message.senderWaId) })),
       },
     }
   })

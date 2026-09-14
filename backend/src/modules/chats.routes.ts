@@ -4,6 +4,7 @@ import { authenticate } from '../middleware/auth.js'
 import { str, strOrNull, bool, int, strArray, waDigits, isUsableWaId } from '../lib/input.js'
 import { tick } from '../lib/pipeline/scheduler.js'
 import { rereadMedia } from '../lib/llm/media.js'
+import { isTeam } from '../lib/team.js'
 
 const RULE_FIELDS = { id: true, chatId: true, text: true, extraAsk: true, senderWaIds: true, toDashboard: true, toWhatsapp: true, active: true, createdAt: true, updatedAt: true }
 
@@ -74,7 +75,13 @@ export default async function chatRoutes(app: FastifyInstance) {
       prisma.item.count({ where: { chatId: id } }),
       prisma.item.count({ where: { chatId: id, status: { in: ['NEW', 'IN_PROGRESS'] } } }),
     ])
-    return { chat: { ...chat, counts: { pending, dismissed, flagged, attached, items, openItems } } }
+    return {
+      chat: {
+        ...chat,
+        participants: chat.participants.map((p) => ({ ...p, team: isTeam(p.waId) })),
+        counts: { pending, dismissed, flagged, attached, items, openItems },
+      },
+    }
   })
 
   app.put('/api/chats/:id', async (request, reply) => {
@@ -115,7 +122,7 @@ export default async function chatRoutes(app: FastifyInstance) {
       }),
       prisma.message.count({ where }),
     ])
-    return { messages, total, page, limit }
+    return { messages: messages.map((m) => ({ ...m, team: isTeam(m.senderWaId) })), total, page, limit }
   })
 
   app.post('/api/chats/:id/rules', async (request, reply) => {

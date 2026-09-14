@@ -3,6 +3,7 @@ import { join } from 'path'
 import prisma from '../prisma.js'
 import { MEDIA_DIR } from '../paths.js'
 import { mediaReadable } from '../llm/media.js'
+import { isTeam } from '../team.js'
 import type { ParsedInbound } from './inbound.js'
 
 /// Where an inbound message goes once parsed. Two rules:
@@ -172,9 +173,10 @@ export async function handleInbound(parsed: ParsedInbound, download?: MediaDownl
       quotedWaMessageId: parsed.quotedWaMessageId,
       sentAt: parsed.timestamp,
       simulated,
-      // Our own messages are context, never candidates.
-      filterStatus: parsed.fromMe ? 'SKIPPED' : 'PENDING',
-      filterReason: parsed.fromMe ? 'Sent by us' : null,
+      // Our own messages — from this phone or from anyone on the team
+      // roster — are context, never candidates.
+      filterStatus: parsed.fromMe || isTeam(parsed.senderWaId) ? 'SKIPPED' : 'PENDING',
+      filterReason: parsed.fromMe ? 'Sent by us' : isTeam(parsed.senderWaId) ? 'Sent by our team' : null,
     },
   })
 

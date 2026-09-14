@@ -98,6 +98,20 @@ model Participant {
   @@map("participants")
 }
 
+/// The business's own people, system-wide, keyed on the sender id the link
+/// actually saw (a number, or `lid:…` for a sender that never showed one).
+/// A team member's message is context in every chat — never a candidate —
+/// and is labelled "(our team)" wherever a model reads it. The linked phone
+/// itself is team by definition (`fromMe`) and is not listed here.
+model TeamMember {
+  waId      String   @id @map("wa_id")
+  /// The name shown when it was chosen; display only, never used to match.
+  name      String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("team_members")
+}
+
 // ─── Rules ──────────────────────────────────────────────────────────────────
 
 /// A plain-language tracking rule. Free-form on purpose: the text IS the
