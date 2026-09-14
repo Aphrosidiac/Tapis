@@ -14,6 +14,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'chats/:id', name: 'chat', component: () => import('../views/ChatDetailPage.vue'), meta: { title: 'Chat' } },
       { path: 'review', name: 'review', component: () => import('../views/ReviewPage.vue'), meta: { title: 'Review' } },
       { path: 'whatsapp', name: 'whatsapp', component: () => import('../views/WhatsAppPage.vue'), meta: { title: 'WhatsApp link' } },
+      { path: 'assistant/:id?', name: 'assistant', component: () => import('../views/AssistantPage.vue'), meta: { title: 'Assistant' } },
       { path: 'settings', name: 'settings', component: () => import('../views/SettingsPage.vue'), meta: { title: 'Settings' } },
     ],
   },

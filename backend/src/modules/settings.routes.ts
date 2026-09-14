@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { authenticate } from '../middleware/auth.js'
 import { publicSettings, saveSettings, saveSecret, clearSecret, settings, mockAllowed, type Settings, type SecretName } from '../lib/settings.js'
-import { testProvider, modelCatalogue, audioModelCatalogue } from '../lib/llm/client.js'
+import { testProvider, modelCatalogue, audioModelCatalogue, agentModelCatalogue } from '../lib/llm/client.js'
 import { str, bool, int } from '../lib/input.js'
 
 const SECRET_NAMES: Record<string, SecretName> = { anthropic: 'anthropicApiKey', openrouter: 'openrouterApiKey' }
@@ -9,7 +9,7 @@ const SECRET_NAMES: Record<string, SecretName> = { anthropic: 'anthropicApiKey',
 export default async function settingsRoutes(app: FastifyInstance) {
   app.addHook('preHandler', authenticate)
 
-  app.get('/api/settings', async () => ({ settings: publicSettings(), models: modelCatalogue(), audioModels: audioModelCatalogue() }))
+  app.get('/api/settings', async () => ({ settings: publicSettings(), models: modelCatalogue(), audioModels: audioModelCatalogue(), agentModels: agentModelCatalogue() }))
 
   app.put('/api/settings', async (request, reply) => {
     const body = (request.body ?? {}) as Record<string, unknown>
@@ -47,6 +47,13 @@ export default async function settingsRoutes(app: FastifyInstance) {
     if (body.describeImages !== undefined) patch.describeImages = bool(body.describeImages, cur.describeImages)
     if (body.transcribeVoice !== undefined) patch.transcribeVoice = bool(body.transcribeVoice, cur.transcribeVoice)
     if (body.translateOriginals !== undefined) patch.translateOriginals = bool(body.translateOriginals, cur.translateOriginals)
+    if (body.agentModel !== undefined) patch.agentModel = str(body.agentModel).slice(0, 100) || cur.agentModel
+    if (body.agentEscalationModel !== undefined) patch.agentEscalationModel = str(body.agentEscalationModel).slice(0, 100) || cur.agentEscalationModel
+    if (body.agentEffort !== undefined) {
+      const e = str(body.agentEffort)
+      if (!['low', 'medium', 'high'].includes(e)) return reply.status(400).send({ error: 'Effort is low, medium or high' })
+      patch.agentEffort = e as Settings['agentEffort']
+    }
     if (body.transcribeModel !== undefined) patch.transcribeModel = str(body.transcribeModel).slice(0, 100) || cur.transcribeModel
     await saveSettings(patch)
     return { settings: publicSettings() }

@@ -159,3 +159,17 @@ a four-character tail.
 never a static mount: the session directory is its sibling, and the next
 person to serve a directory of files should not be able to reach a WhatsApp
 login by doing so.
+
+## Assistant
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/agent/threads` | conversations, newest activity first, with `running` |
+| POST | `/agent/threads` | new conversation → `{ thread }` |
+| GET | `/agent/threads/:id` | the conversation with its full transcript |
+| PUT | `/agent/threads/:id` | `{ title }` |
+| DELETE | `/agent/threads/:id` | 409 while a turn is running |
+| POST | `/agent/threads/:id/turns` | `{ text }` → `{ userMessage }`; the work continues in the background. 409 if a turn is already running |
+| POST | `/agent/threads/:id/stop` | aborts the running turn |
+| GET | `/agent/threads/:id/events?since=N` | SSE: `step`, `text`, `reasoning`, `tool_start`, `tool_end`, `message`, `done`, `error`; `idle` when nothing is running. Send the auth header — it is a fetch, not an EventSource — and resume from the last `id` |
+| GET | `/agent/tools` | the tools, with tier and description |

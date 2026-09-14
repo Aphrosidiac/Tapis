@@ -3,7 +3,7 @@ import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import { z } from 'zod'
 import prisma from '../prisma.js'
 import { settings, providerApiKey, secret } from '../settings.js'
-import { supportsEffort, MODELS, AUDIO_MODELS } from './models.js'
+import { supportsEffort, MODELS, AUDIO_MODELS, AGENT_MODELS } from './models.js'
 import { mockCall } from './mock.js'
 
 /// One place that talks to a model. Two providers behind one call:
@@ -26,7 +26,7 @@ export interface ImageInput {
 }
 
 export interface ParsedCallOptions<T> {
-  kind: 'FILTER' | 'ANALYZE' | 'MEDIA' | 'TRANSLATE'
+  kind: 'FILTER' | 'ANALYZE' | 'MEDIA' | 'TRANSLATE' | 'AGENT'
   /// What the mock provider answers with, when it is the provider.
   mock?: () => unknown
   model: string
@@ -125,7 +125,7 @@ async function viaAnthropic<T>(opts: ParsedCallOptions<T>): Promise<{ data: T; u
 
 // ── OpenRouter ─────────────────────────────────────────────────────────────
 
-const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
+export const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 
 async function viaOpenRouter<T>(opts: ParsedCallOptions<T>): Promise<{ data: T; usage: Usage }> {
   const key = secret('openrouterApiKey')
@@ -303,6 +303,14 @@ function validate<T>(schema: z.ZodType<T>, text: string): T {
   return check.data
 }
 
+/// Any call, from anywhere, into the ledger. The assistant's loop records
+/// through this because its calls do not fit ParsedCallOptions.
+export async function recordLlmCall(kind: ParsedCallOptions<unknown>['kind'], model: string, usage: Usage | null, latencyMs: number, ok: boolean, error: string | null) {
+  return record({ kind, model, system: '', text: '', schema: z.any(), maxTokens: 0 }, usage, latencyMs, ok, error)
+}
+
+export type { Usage }
+
 async function record(opts: ParsedCallOptions<unknown>, usage: Usage | null, latencyMs: number, ok: boolean, error: string | null) {
   try {
     await prisma.llmCall.create({
@@ -355,4 +363,8 @@ export function modelCatalogue() {
 
 export function audioModelCatalogue() {
   return AUDIO_MODELS
+}
+
+export function agentModelCatalogue() {
+  return AGENT_MODELS
 }

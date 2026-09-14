@@ -292,6 +292,46 @@ survived it.
 
 ---
 
+## The assistant
+
+A chat with the whole system, in the sidebar. It sees everything Tapis holds
+— chats, messages with transcripts and translations, items, pipeline runs,
+settings, spend — and answers from the data, never from memory: every claim
+comes back from a tool call you can open and read.
+
+The loop is ours, not a provider's, so it runs on any tool-calling model on
+OpenRouter. The default is **DeepSeek V4 Flash** (`agentModel`): a turn that
+reads the state, opens three items and searches two chats costs about a
+tenth of a cent. What makes a cheap model reliable is the harness:
+
+- **Typed, tiered tools.** No shell. Every capability is a dedicated tool
+  with a Zod schema; a bad call becomes an error result the model can read,
+  never a crash. `read` tools run freely and in parallel; `write` and
+  `outward` tiers (next phases) are logged with before/after and gated.
+- **`sql_query`** for the long tail: one read-only `SELECT`, in a read-only
+  transaction with a 5s limit and a 200-row cap, over a documented schema
+  (`describe_schema`). `users` and `app_settings` are not reachable.
+- **Append-only transcript.** Every message the model saw or wrote is a row
+  in `agent_messages`, stored before the next request. Reloading shows the
+  same conversation; a reconnect resumes the same stream by event id.
+- **Budgets.** 24 steps and 40K output tokens per turn, with a wrap-up nudge
+  before the hard stop; 30s per tool call.
+- **Escalation.** Two consecutive steps of invalid tool calls, or a provider
+  error, hand the turn to `agentEscalationModel` (DeepSeek V4 Pro by default).
+- **Cache-friendly prompt.** A frozen system prompt first, a small live brief
+  (link state, counts, the time) second, then the transcript — DeepSeek's
+  prefix cache reads the prefix at a fifth of the input price.
+- **Untrusted content.** The prompt and the tool descriptions both say it:
+  what a client wrote is data, not instructions.
+
+Every call lands in `llm_calls` as kind `AGENT`; the thread header shows
+tokens and cost. Reasoning is shown behind a disclosure; tool calls are
+cards that open to the exact input and result.
+
+Next: write tools with approval cards and undo, then the memory layer
+(operator preferences, per-client notes, learned procedures, nightly
+consolidation), then evals from real threads.
+
 ## Data model
 
 | Model | What it is |
@@ -441,6 +481,13 @@ against the same session directory, and never PM2 cluster mode.
 ## Changelog
 
 Newest first. Every entry below was driven by a real account, not a plan.
+
+**The assistant, phase 1** — a sidebar chat over the whole system on a
+provider-neutral tool loop (DeepSeek V4 Flash by default), thirteen read
+tools including read-only SQL, streaming with reasoning and tool cards,
+append-only threads, budgets and escalation. First real question — "what
+needs my attention" — answered correctly from four steps and seven tool
+calls for $0.001.
 
 **Address book and the chat list** — contacts stored in their own table on
 arrival, because the app-state sync that carries saved names runs before the

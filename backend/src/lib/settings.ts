@@ -39,6 +39,12 @@ export interface Settings {
   /// Whether originals in a script the operator may not read (Chinese) get
   /// a translation into the output language, shown beside them.
   translateOriginals: boolean
+  /// The assistant. OpenRouter ids; the loop is provider-neutral, so any
+  /// model with tool calling works. `agentEscalationModel` takes over when
+  /// a turn keeps failing validation — rare, so it may be a dearer model.
+  agentModel: string
+  agentEscalationModel: string
+  agentEffort: 'low' | 'medium' | 'high'
 }
 
 export interface SecretSettings {
@@ -63,6 +69,9 @@ export const DEFAULTS: Settings = {
   transcribeVoice: true,
   transcribeModel: 'google/gemini-3.8-flash',
   translateOriginals: true,
+  agentModel: 'deepseek/deepseek-v4-flash',
+  agentEscalationModel: 'deepseek/deepseek-v4-pro',
+  agentEffort: 'medium',
 }
 
 export const LANGUAGE_NAMES: Record<OutputLanguage, string> = {
@@ -88,6 +97,9 @@ function coerce(raw: Partial<Settings> | null | undefined): Settings {
   // The mock is a development tool. Production never runs it.
   if (s.provider === 'mock' && process.env.NODE_ENV === 'production') s.provider = 'anthropic'
   if (!s.transcribeModel) s.transcribeModel = DEFAULTS.transcribeModel
+  if (!s.agentModel) s.agentModel = DEFAULTS.agentModel
+  if (!s.agentEscalationModel) s.agentEscalationModel = DEFAULTS.agentEscalationModel
+  if (!['low', 'medium', 'high'].includes(s.agentEffort)) s.agentEffort = DEFAULTS.agentEffort
   if (!s.filterModel) s.filterModel = DEFAULTS.filterModel
   if (!s.analyzeModel) s.analyzeModel = DEFAULTS.analyzeModel
   // A known model keeps working when the provider changes under it.

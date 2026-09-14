@@ -256,6 +256,7 @@ enum LlmKind {
   ANALYZE
   MEDIA     // a transcript or an image description
   TRANSLATE // originals rendered into the output language, for the reader
+  AGENT     // a turn of the assistant's loop
 }
 
 /// Every model call, so the cost of the pipeline is a number on a screen and
@@ -424,4 +425,71 @@ model Feedback {
 
   @@index([chatId, createdAt])
   @@map("feedback")
+}
+
+// ─── The assistant ──────────────────────────────────────────────────────────
+
+/// One conversation with the assistant. The transcript is append-only:
+/// every message the model saw or wrote is a row, in order, and a run
+/// only ever adds rows. Compaction (later) adds a summary row and marks
+/// what it replaced; it never deletes.
+model AgentThread {
+  id            String   @id @default(uuid())
+  title         String   @default("New conversation")
+  /// idle, or running — one run at a time per thread.
+  status        String   @default("idle")
+  model         String?
+  inputTokens   Int      @default(0) @map("input_tokens")
+  outputTokens  Int      @default(0) @map("output_tokens")
+  costUsd       Float    @default(0) @map("cost_usd")
+  turns         Int      @default(0)
+  lastMessageAt DateTime @default(now()) @map("last_message_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  messages AgentMessage[]
+  actions  AgentAction[]
+
+  @@index([lastMessageAt])
+  @@map("agent_threads")
+}
+
+/// A transcript row, provider-neutral. `content` is one of:
+///   { text }                                   user or assistant prose
+///   { text?, reasoning?, toolCalls: [{ id, name, input }] }   assistant
+///   { toolResults: [{ id, name, output, isError }] }          tool
+///   { summary, replaces: [seq, seq] }          compaction (later)
+model AgentMessage {
+  id        String      @id @default(uuid())
+  threadId  String      @map("thread_id")
+  thread    AgentThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  seq       Int
+  role      String
+  content   Json
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  @@unique([threadId, seq])
+  @@map("agent_messages")
+}
+
+/// Every tool call the assistant made, with what it changed. The audit
+/// trail and, for write tools, the undo record.
+model AgentAction {
+  id        String      @id @default(uuid())
+  threadId  String      @map("thread_id")
+  thread    AgentThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  tool      String
+  tier      String
+  input     Json
+  output    Json?
+  before    Json?
+  after     Json?
+  ok        Boolean     @default(true)
+  error     String?
+  latencyMs Int         @default(0) @map("latency_ms")
+  undoneAt  DateTime?   @map("undone_at")
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  @@index([threadId, createdAt])
+  @@map("agent_actions")
 }

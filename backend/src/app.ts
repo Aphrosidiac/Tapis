@@ -21,6 +21,8 @@ import dashboardRoutes from './modules/dashboard.routes.js'
 import noticeRoutes from './modules/notices.routes.js'
 import devRoutes from './modules/dev.routes.js'
 import teamRoutes from './modules/team.routes.js'
+import agentRoutes from './modules/agent.routes.js'
+import { setAgentLogger } from './lib/agent/run.js'
 
 export interface BuildOptions {
   /// Connect the WhatsApp link and run the pipeline. Only the one serving
@@ -57,6 +59,7 @@ export async function buildApp(opts: BuildOptions = {}) {
   const log = (msg: string, err?: unknown) => (err ? app.log.warn({ err }, msg) : app.log.info(msg))
   setBaileysLogger(log)
   setIngestLogger(log)
+  setAgentLogger(log)
 
   app.get('/api/health', async () => ({ ok: true }))
   await app.register(authRoutes)
@@ -69,6 +72,7 @@ export async function buildApp(opts: BuildOptions = {}) {
   await app.register(noticeRoutes)
   await app.register(devRoutes)
   await app.register(teamRoutes)
+  await app.register(agentRoutes)
 
   // The built frontend, when it exists. Any non-API path is the SPA.
   const dist = join(process.cwd(), '..', 'frontend', 'dist')

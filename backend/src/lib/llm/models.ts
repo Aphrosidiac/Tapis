@@ -35,8 +35,25 @@ export const AUDIO_MODELS: ModelInfo[] = [
   { key: 'gpt-audio-mini', label: 'GPT Audio Mini', anthropic: '', openrouter: 'openai/gpt-audio-mini', in: 0.6, out: 2.4, effort: false },
 ]
 
+/// Models for the assistant's loop. Cheap, tool-calling, long-context —
+/// the harness carries the reliability, so the model can be a fraction of
+/// the analysis model's price. OpenRouter ids.
+export const AGENT_MODELS: ModelInfo[] = [
+  { key: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash — recommended', anthropic: '', openrouter: 'deepseek/deepseek-v4-flash', in: 0.09, out: 0.18, effort: true },
+  { key: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro — for escalation', anthropic: '', openrouter: 'deepseek/deepseek-v4-pro', in: 1.6, out: 3.2, effort: true },
+  { key: 'kimi-k2.5', label: 'Kimi K2.5', anthropic: '', openrouter: 'moonshotai/kimi-k2.5', in: 0.45, out: 2.25, effort: true },
+  { key: 'qwen3-235b', label: 'Qwen3 235B (2507)', anthropic: '', openrouter: 'qwen/qwen3-235b-a22b-2507', in: 0.09, out: 0.35, effort: false },
+  { key: 'minimax-m3', label: 'MiniMax M3', anthropic: '', openrouter: 'minimax/minimax-m3', in: 0.3, out: 1.2, effort: true },
+  { key: 'sonnet-5-agent', label: 'Claude Sonnet 5', anthropic: 'claude-sonnet-5', openrouter: 'anthropic/claude-sonnet-5', in: 2, out: 10, effort: true },
+]
+
 export function modelInfo(id: string): ModelInfo | null {
-  return MODELS.find((m) => m.anthropic === id || m.openrouter === id) ?? AUDIO_MODELS.find((m) => m.openrouter === id) ?? null
+  return (
+    MODELS.find((m) => m.anthropic === id || m.openrouter === id) ??
+    AUDIO_MODELS.find((m) => m.openrouter === id) ??
+    AGENT_MODELS.find((m) => m.openrouter === id) ??
+    null
+  )
 }
 
 export function supportsEffort(id: string): boolean {

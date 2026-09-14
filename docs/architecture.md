@@ -50,6 +50,12 @@ backend/src
       filter.ts           first pass
       analyze.ts          second pass
       mock.ts             dev-only stand-in
+    agent/
+      provider.ts         streaming chat completions with tools, one wire shape
+      tools.ts            the registry: typed, tiered tools
+      read-tools.ts       what it can look at, plus read-only SQL
+      prompt.ts           the frozen system prompt and the live brief
+      run.ts              the loop: persist, validate, budget, escalate, stream
     pipeline/
       scheduler.ts        the tick
       bundle.ts           cutting bundles, running both passes
@@ -57,7 +63,7 @@ backend/src
       deliver.ts          WhatsApp formatting, queue, send
   modules/                one *.routes.ts per screen
 frontend/src
-  views/                  Dashboard, Item, Chats, ChatDetail, Review, WhatsApp, Settings, Login
+  views/                  Dashboard, Item, Chats, ChatDetail, Review, Assistant, WhatsApp, Settings, Login
   components/base/        the primitives
   components/layout/      AppLayout, Sidebar, Navbar, NoticeBell
   stores/                 auth, link, notices

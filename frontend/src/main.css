@@ -252,3 +252,25 @@
 
   .skeleton { animation: none; background: var(--color-line-100); }
 }
+
+/* The assistant's prose. Light markdown from a model, rendered through an
+   escaping renderer; these are the only shapes it can produce. */
+.prose-tapis p { margin: 0 0 0.6em; }
+.prose-tapis p:last-child { margin-bottom: 0; }
+.prose-tapis .md-h { font-weight: 600; color: var(--color-ink-900); margin-top: 0.9em; }
+.prose-tapis ul, .prose-tapis ol { margin: 0 0 0.6em; padding-left: 1.4em; }
+.prose-tapis ul { list-style: disc; }
+.prose-tapis ol { list-style: decimal; }
+.prose-tapis li { margin: 0.15em 0; }
+.prose-tapis li::marker { color: var(--color-ink-400); }
+.prose-tapis strong { font-weight: 600; color: var(--color-ink-900); }
+.prose-tapis code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; background: var(--color-line-100); padding: 0.1em 0.35em; border-radius: 4px; }
+.prose-tapis pre { background: var(--color-line-100); border-radius: 6px; padding: 0.6em 0.8em; overflow-x: auto; margin: 0 0 0.6em; }
+.prose-tapis pre code { background: none; padding: 0; font-size: 12px; line-height: 16px; }
+.prose-tapis hr { border: 0; border-top: 1px solid var(--color-line-200); margin: 0.8em 0; }
+.prose-tapis blockquote { border-left: 2px solid var(--color-line-200); padding-left: 0.8em; color: var(--color-ink-600); margin: 0 0 0.6em; }
+.prose-tapis a { color: var(--color-primary-700); text-decoration: underline; }
+.prose-tapis .md-table { overflow-x: auto; margin: 0 0 0.6em; }
+.prose-tapis table { border-collapse: collapse; font-size: 14px; line-height: 20px; min-width: 50%; }
+.prose-tapis th, .prose-tapis td { text-align: left; padding: 0.3em 0.8em 0.3em 0; border-bottom: 1px solid var(--color-line-100); vertical-align: top; }
+.prose-tapis th { font-weight: 600; color: var(--color-ink-900); border-bottom-color: var(--color-line-200); }

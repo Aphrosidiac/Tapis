@@ -32,6 +32,9 @@ interface Settings {
   transcribeVoice: boolean
   transcribeModel: string
   translateOriginals: boolean
+  agentModel: string
+  agentEscalationModel: string
+  agentEffort: 'low' | 'medium' | 'high'
   keys: { anthropic: KeyView; openrouter: KeyView }
   simulationAllowed: boolean
   mockAllowed: boolean
@@ -44,6 +47,7 @@ const notices = useNoticesStore()
 const s = ref<Settings | null>(null)
 const models = ref<Model[]>([])
 const audioModels = ref<Model[]>([])
+const agentModels = ref<Model[]>([])
 const form = reactive<Partial<Settings>>({})
 const keys = reactive({ anthropic: '', openrouter: '' })
 const busy = ref('')
@@ -51,10 +55,11 @@ const test = ref<{ ok: boolean; message: string } | null>(null)
 const account = reactive({ name: '', currentPassword: '', password: '' })
 
 async function load() {
-  const { data } = await api.get<{ settings: Settings; models: Model[]; audioModels: Model[] }>('/settings')
+  const { data } = await api.get<{ settings: Settings; models: Model[]; audioModels: Model[]; agentModels: Model[] }>('/settings')
   s.value = data.settings
   models.value = data.models
   audioModels.value = data.audioModels
+  agentModels.value = data.agentModels
   Object.assign(form, data.settings)
   account.name = auth.user?.name ?? ''
 }
@@ -197,6 +202,31 @@ const PROVIDERS = computed(() => [
             <BaseInput v-model="form.bundleMaxMessages" type="number" :min="3" :max="100" label="Or this many waiting" hint="Default 15" />
             <BaseInput v-model="form.bundleMaxWaitSeconds" type="number" :min="30" :max="7200" label="Or oldest waited (seconds)" hint="Default 300" />
             <BaseInput v-model="form.contextMessages" type="number" :min="0" :max="60" label="Earlier messages as context" hint="Default 20" />
+          </div>
+        </Card>
+
+        <Card title="Assistant" sub="The model behind the Assistant screen. Any tool-calling model on OpenRouter works; the harness carries the reliability, so a cheap one does well.">
+          <div class="space-y-4">
+            <BaseSelect
+              v-model="form.agentModel"
+              label="Model"
+              :options="[...new Set([form.agentModel!, ...agentModels.map((m) => m.openrouter)])].map((id) => ({ value: id, label: agentModels.find((m) => m.openrouter === id) ? `${agentModels.find((m) => m.openrouter === id)!.label} · $${agentModels.find((m) => m.openrouter === id)!.in}/$${agentModels.find((m) => m.openrouter === id)!.out} per M tokens` : id }))"
+            />
+            <BaseSelect
+              v-model="form.agentEscalationModel"
+              label="Escalation model"
+              :options="[...new Set([form.agentEscalationModel!, ...agentModels.map((m) => m.openrouter)])].map((id) => ({ value: id, label: agentModels.find((m) => m.openrouter === id) ? `${agentModels.find((m) => m.openrouter === id)!.label} · $${agentModels.find((m) => m.openrouter === id)!.in}/$${agentModels.find((m) => m.openrouter === id)!.out} per M tokens` : id }))"
+              hint="Takes over a turn when the first model fails or keeps calling tools wrongly. Rare, so it may cost more."
+            />
+            <BaseSelect
+              v-model="form.agentEffort"
+              label="Reasoning effort"
+              :options="[
+                { value: 'low', label: 'Low — quick answers' },
+                { value: 'medium', label: 'Medium — the default' },
+                { value: 'high', label: 'High — for hard questions' },
+              ]"
+            />
           </div>
         </Card>
 

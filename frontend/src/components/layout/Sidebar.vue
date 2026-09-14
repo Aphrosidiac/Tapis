@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
-import { LayoutDashboard, MessagesSquare, ListChecks, Smartphone, Settings2, X } from 'lucide-vue-next'
+import { LayoutDashboard, MessagesSquare, ListChecks, Smartphone, Settings2, Sparkles, X } from 'lucide-vue-next'
 
 defineProps<{ open: boolean }>()
 defineEmits<{ close: [] }>()
@@ -13,6 +13,7 @@ const NAV = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { to: '/chats', label: 'Chats & rules', icon: MessagesSquare },
   { to: '/review', label: 'Review', icon: ListChecks },
+  { to: '/assistant', label: 'Assistant', icon: Sparkles },
   { to: '/whatsapp', label: 'WhatsApp link', icon: Smartphone },
   { to: '/settings', label: 'Settings', icon: Settings2 },
 ]
