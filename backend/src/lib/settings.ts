@@ -47,6 +47,10 @@ export interface Settings {
   agentEffort: 'low' | 'medium' | 'high'
   /// The nightly memory consolidation run.
   agentReflect: boolean
+  /// The morning brief to the operator's WhatsApp.
+  agentDigest: boolean
+  agentDigestTo: string
+  agentDigestHour: number
 }
 
 export interface SecretSettings {
@@ -75,6 +79,9 @@ export const DEFAULTS: Settings = {
   agentEscalationModel: 'deepseek/deepseek-v4-pro',
   agentEffort: 'medium',
   agentReflect: true,
+  agentDigest: false,
+  agentDigestTo: '',
+  agentDigestHour: 8,
 }
 
 export const LANGUAGE_NAMES: Record<OutputLanguage, string> = {
@@ -103,6 +110,8 @@ function coerce(raw: Partial<Settings> | null | undefined): Settings {
   if (!s.agentModel) s.agentModel = DEFAULTS.agentModel
   if (!s.agentEscalationModel) s.agentEscalationModel = DEFAULTS.agentEscalationModel
   if (!['low', 'medium', 'high'].includes(s.agentEffort)) s.agentEffort = DEFAULTS.agentEffort
+  s.agentDigestHour = clamp(s.agentDigestHour, 0, 23, DEFAULTS.agentDigestHour)
+  s.agentDigestTo = String(s.agentDigestTo ?? '').replace(/[^0-9]/g, '')
   if (!s.filterModel) s.filterModel = DEFAULTS.filterModel
   if (!s.analyzeModel) s.analyzeModel = DEFAULTS.analyzeModel
   // A known model keeps working when the provider changes under it.

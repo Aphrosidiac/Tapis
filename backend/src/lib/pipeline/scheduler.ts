@@ -2,6 +2,7 @@ import prisma from '../prisma.js'
 import { cutBundles, processBundle, setPipelineLogger } from './bundle.js'
 import { sendPendingDeliveries } from './deliver.js'
 import { maybeReflect } from '../agent/reflect.js'
+import { maybeDigest } from '../agent/digest.js'
 
 /// The clock. One tick every few seconds: cut bundles that are due, run
 /// each through the two passes, send whatever is queued for WhatsApp.
@@ -56,7 +57,10 @@ export async function tick(opts: { force?: boolean; chatId?: string } = {}): Pro
       out.processed += 1
     }
     out.sent = await sendPendingDeliveries(logLine)
-    if (!opts.force) await maybeReflect().catch((err) => logLine('nightly reflection failed', err))
+    if (!opts.force) {
+      await maybeReflect().catch((err) => logLine('nightly reflection failed', err))
+      await maybeDigest().catch((err) => logLine('morning brief failed', err))
+    }
     lastError = null
   } catch (err) {
     lastError = err instanceof Error ? err.message : String(err)

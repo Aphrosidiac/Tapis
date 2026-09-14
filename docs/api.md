@@ -178,4 +178,5 @@ login by doing so.
 | GET | `/agent/memory` | the memory files with sizes |
 | GET/PUT/DELETE | `/agent/memory/<path>` | one file; PUT takes `{ content }` |
 | POST | `/agent/reflect` | run tonight's reflection now → `{ threadId }` |
+| POST | `/agent/digest` | write and send the morning brief now → `{ threadId, sent }` |
 | GET | `/agent/tools` | the tools, with tier and description |

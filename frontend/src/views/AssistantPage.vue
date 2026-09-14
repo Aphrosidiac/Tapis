@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Plus, Square, SendHorizontal, Trash2, ChevronDown, ChevronRight, Loader2, Wrench, MessagesSquare, X, ShieldAlert, Undo2, Check, Brain, MoonStar } from 'lucide-vue-next'
+import { Plus, Square, SendHorizontal, Trash2, ChevronDown, ChevronRight, Loader2, Wrench, MessagesSquare, X, ShieldAlert, Undo2, Check, Brain, MoonStar, Sunrise } from 'lucide-vue-next'
 import { api, errorMessage } from '../lib/api'
 import { useToast } from '../composables/useToast'
 import { streamAgentEvents, type AgentEvent } from '../lib/agentStream'
@@ -299,6 +299,7 @@ onBeforeUnmount(() => stop?.())
           <div class="min-w-0 flex-1">
             <p class="flex items-center gap-1.5 truncate text-[14px] leading-5" :class="t.id === threadId ? 'font-medium text-ink-900' : 'text-ink-800'">
               <MoonStar v-if="t.kind === 'reflect'" class="size-3.5 shrink-0 text-ink-400" :stroke-width="1.5" aria-label="Nightly reflection" />
+              <Sunrise v-else-if="t.kind === 'digest'" class="size-3.5 shrink-0 text-ink-400" :stroke-width="1.5" aria-label="Morning brief" />
               <span class="truncate">{{ t.title }}</span>
             </p>
             <p class="text-[12px] leading-4 text-ink-500">

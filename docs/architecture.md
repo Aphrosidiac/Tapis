@@ -57,6 +57,7 @@ backend/src
       write-tools.ts      what it can change (audited, undoable) and what waits for approval
       memory.ts           the /memories directory and its six-command tool
       reflect.ts          the nightly consolidation thread
+      digest.ts           the morning brief to WhatsApp
       prompt.ts           the frozen system prompt and the live brief
       run.ts              the loop: persist, validate, budget, escalate, stream
     pipeline/

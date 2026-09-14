@@ -1,11 +1,12 @@
 import type { FastifyInstance } from 'fastify'
 import prisma from '../lib/prisma.js'
 import { authenticate } from '../middleware/auth.js'
-import { str, int } from '../lib/input.js'
+import { str, int, isUsableWaId } from '../lib/input.js'
 import { startTurn, subscribe, stopRun, activeRun, approveAction, declineAction, undoAction, actionView, type AgentEvent } from '../lib/agent/run.js'
 import { allTools } from '../lib/agent/tools.js'
 import { listMemory, readMemory, writeMemory, deleteMemory } from '../lib/agent/memory.js'
 import { runReflection } from '../lib/agent/reflect.js'
+import { runDigest } from '../lib/agent/digest.js'
 import { settings } from '../lib/settings.js'
 
 /// The assistant's API: threads, turns, and a stream of what a turn is
@@ -143,6 +144,13 @@ export default async function agentRoutes(app: FastifyInstance) {
   app.post('/api/agent/reflect', async () => {
     const day = new Date().toISOString().slice(0, 10)
     return { threadId: await runReflection(day) }
+  })
+
+  /// Writes and sends the morning brief now.
+  app.post('/api/agent/digest', async (request, reply) => {
+    const s = settings()
+    if (!isUsableWaId(s.agentDigestTo)) return reply.status(400).send({ error: 'Set the number for the morning brief on Settings first' })
+    return runDigest(new Date().toISOString().slice(0, 10))
   })
 
   app.get('/api/agent/tools', async () => ({ tools: allTools().map((t) => ({ name: t.name, tier: t.tier, description: t.description })) }))

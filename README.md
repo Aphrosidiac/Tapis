@@ -347,11 +347,20 @@ know tomorrow. Long threads are **compacted** client-side: older rows are
 summarised into a system row that records what it replaced; the rows stay
 for you, the model sees the summary plus the tail.
 
+**Morning brief.** Optional: at a set hour the assistant writes what needs
+you today, in its own thread, and the harness sends it to your WhatsApp —
+no outward tool, so nothing waits for an approval nobody is awake to give.
+
+**Evals.** `backend/scripts/agent-eval.mjs` runs real questions against the
+running API and judges what the assistant did, not just what it said: which
+tools it called, which it must not have, that an outward call parked instead
+of running, that an instruction inside a client's message was treated as
+data, that memory answered without the database. Five cases, ~$0.003 a run.
+Run it before changing the prompt or the model.
+
 Every call lands in `llm_calls` as kind `AGENT`; the thread header shows
 tokens and cost. Reasoning is shown behind a disclosure; tool calls are
 cards that open to the exact input and result.
-
-Next: evals from real threads, and a scheduled morning digest.
 
 ## Data model
 
@@ -456,6 +465,7 @@ because a count you cannot act on is not worth the top of a screen. Details in
 ```bash
 cd backend && npm test        # node:test, no database required
 npm run typecheck
+node scripts/agent-eval.mjs   # the assistant, against the running API (spends ~$0.003)
 ```
 
 The suite covers the two parsers that have historically been wrong, using
@@ -502,6 +512,10 @@ against the same session directory, and never PM2 cluster mode.
 ## Changelog
 
 Newest first. Every entry below was driven by a real account, not a plan.
+
+**The assistant, phase 4** — the morning brief to WhatsApp on a schedule,
+an eval harness over the live API (5/5, $0.003), reflection and brief
+settings, the 520px layout checked. All four phases shipped in a day.
 
 **The assistant, phase 3** — memory: a six-command file tool over a Postgres
 directory, the operator file in every prompt, a Memory panel, client-side

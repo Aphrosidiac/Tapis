@@ -35,6 +35,10 @@ interface Settings {
   agentModel: string
   agentEscalationModel: string
   agentEffort: 'low' | 'medium' | 'high'
+  agentReflect: boolean
+  agentDigest: boolean
+  agentDigestTo: string
+  agentDigestHour: number
   keys: { anthropic: KeyView; openrouter: KeyView }
   simulationAllowed: boolean
   mockAllowed: boolean
@@ -227,6 +231,24 @@ const PROVIDERS = computed(() => [
                 { value: 'high', label: 'High — for hard questions' },
               ]"
             />
+            <label class="flex items-start gap-3 py-2">
+              <BaseToggle v-model="form.agentReflect!" label="Nightly reflection" />
+              <span class="text-[14px] leading-5">
+                <span class="font-medium text-ink-900">Consolidate memory every night at 3am.</span><br />
+                <span class="text-ink-500">It re-reads the day's conversations, actions and items, and tidies what it remembers. Costs about a cent.</span>
+              </span>
+            </label>
+            <label class="flex items-start gap-3 py-2">
+              <BaseToggle v-model="form.agentDigest!" label="Morning brief" />
+              <span class="text-[14px] leading-5">
+                <span class="font-medium text-ink-900">Send a morning brief to your WhatsApp.</span><br />
+                <span class="text-ink-500">What needs you today — chasing, left sitting, urgent, failures — as one message, written from the data.</span>
+              </span>
+            </label>
+            <div v-if="form.agentDigest" class="grid gap-3 pl-14 sm:grid-cols-[1fr_8rem]">
+              <BaseInput v-model="form.agentDigestTo" label="Send to" placeholder="60123456789" hint="International digits. Usually your own number." />
+              <BaseInput v-model="form.agentDigestHour" type="number" :min="0" :max="23" label="At (hour)" hint="Local time" />
+            </div>
           </div>
         </Card>
 

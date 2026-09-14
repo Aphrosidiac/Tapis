@@ -40,6 +40,7 @@ export async function maybeReflect(now = new Date()): Promise<boolean> {
 }
 
 export async function runReflection(day: string): Promise<string> {
+  await prisma.appSetting.upsert({ where: { key: KEY }, create: { key: KEY, value: { day } }, update: { value: { day } } })
   const thread = await prisma.agentThread.create({ data: { kind: 'reflect', title: `Nightly reflection · ${day}`, model: settings().agentModel } })
   const prompt = [
     `It is the nightly reflection for ${day}. Nobody is waiting on you; take the steps in order and keep the writing short.`,

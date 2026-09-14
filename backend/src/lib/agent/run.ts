@@ -141,7 +141,7 @@ async function beginRun(threadId: string, opts: { text?: string }): Promise<{ us
   runs.set(threadId, run)
   await prisma.agentThread.update({
     where: { id: threadId },
-    data: { status: 'running', lastMessageAt: new Date(), ...(thread.turns === 0 && opts.text ? { title: titleFrom(opts.text) } : {}) },
+    data: { status: 'running', lastMessageAt: new Date(), ...(thread.turns === 0 && opts.text && thread.kind === 'chat' ? { title: titleFrom(opts.text) } : {}) },
   })
   if (userMessage) emit(run, { type: 'message', message: userMessage })
 
