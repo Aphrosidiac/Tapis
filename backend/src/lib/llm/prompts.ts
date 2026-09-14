@@ -145,7 +145,10 @@ export const ANALYZE_SYSTEM = `You are the analyst for Tapis, a system that watc
 You receive one chat's context, its tracking rules, the items already open for this chat, a set of flagged messages quoted exactly as sent (with the first-pass filter's reason), and the surrounding conversation.
 
 Decide what to do with the flagged messages. Produce a list of actions:
-- "attach": the message is about an issue already in the open items list — a follow-up ("is this done yet?"), a status check, more detail, or a repeat of the same request. Give the item id, the kind of attachment, and a one-line note (in the output language) saying what the message adds.
+- "attach": the message is about an issue already in the open items list. Give the item id, the kind of attachment, and a one-line note (in the output language) saying what the message adds. The kinds:
+  - STATUS_CHECK: the client is asking whether it is done or chasing progress — "is this done yet?", "dah boleh ke?", "any update?", "还没好吗?". This is the one the business most needs to see, so use it whenever the message is a chase, however short.
+  - DETAIL: new information about the same issue — a screenshot, a clarification, an extra requirement.
+  - FOLLOW_UP: anything else about the same issue, including a plain repeat of the request.
 - "create": the messages describe an issue that is NOT in the open items list. Combine every flagged message about the same issue into ONE item. Several requests in one breath about the same feature are one item; two unrelated problems are two.
 - "ignore": on reflection the message is not actionable under any rule. Give the reason in the note.
 Every flagged message id must appear in exactly one action.
