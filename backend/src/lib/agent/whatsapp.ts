@@ -34,6 +34,8 @@ function remember(id: string | null) {
 
 /// Returns true when the message was a control message (handled or
 /// deliberately ignored), so ingest must not store it.
+const CONTROL_MAX_AGE_MS = 15 * 60_000
+
 export async function handleControlMessage(parsed: ParsedInbound): Promise<boolean> {
   const s = settings()
   if (!s.agentWhatsapp || parsed.isGroup) return false
@@ -46,6 +48,12 @@ export async function handleControlMessage(parsed: ParsedInbound): Promise<boole
   // Our own replies come back through the socket as fromMe too.
   if (sentIds.has(parsed.waMessageId)) return true
   if (!parsed.fromMe) return true
+  // An instruction typed while the link was down arrives with the backlog,
+  // hours or days late. Running it then is a surprise, not a service.
+  if (Date.now() - parsed.timestamp.getTime() > CONTROL_MAX_AGE_MS) {
+    logLine(`ignoring an instruction from ${parsed.timestamp.toISOString()}: it arrived after the link was down`)
+    return true
+  }
 
   const reply = async (body: string) => {
     try {

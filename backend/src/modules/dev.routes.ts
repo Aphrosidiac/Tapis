@@ -7,6 +7,7 @@ import { handleInbound } from '../lib/whatsapp/ingest.js'
 import { tick } from '../lib/pipeline/scheduler.js'
 import { str, bool, waDigits } from '../lib/input.js'
 import { fetchChatHistory } from '../lib/whatsapp/baileys.js'
+import { ON_DEMAND_HISTORY_WORKS, ON_DEMAND_HISTORY_DOWN } from './whatsapp.routes.js'
 import { MEDIA_DIR } from '../lib/paths.js'
 import { join, resolve, sep, basename } from 'path'
 
@@ -105,6 +106,7 @@ export default async function devRoutes(app: FastifyInstance) {
       jid = chat.jid
     }
     if (!jid) return reply.status(400).send({ error: 'Pass chatId or jid' })
+    if (!ON_DEMAND_HISTORY_WORKS) return reply.status(409).send({ error: ON_DEMAND_HISTORY_DOWN })
     const days = Math.min(Math.max(Number(q.days) || 3, 1), 30)
     const since = new Date(Date.now() - days * 86_400_000)
     const withMedia = bool(q.media, true)

@@ -52,6 +52,23 @@ let lastOutboundAt: Date | null = null
 let inboundStored = 0
 let inboundIgnored = 0
 
+/// The backlog WhatsApp held while this device was off. The server announces
+/// it on connect (`offline_preview`, a count), Baileys asks for ONE batch of
+/// 100 and never asks again, and the server never volunteers the rest — so
+/// after three days off, 6,800 items stayed on the server and the link sat
+/// "connected" receiving nothing. Nothing on the wire says a batch has
+/// ended, so quiet is the signal: no backlog node for a few seconds while
+/// the announced count is not yet met means ask for the next batch.
+let backlogAnnounced = 0
+let backlogMessages = 0
+let backlogReceived = 0
+let backlogBatches = 0
+let backlogDone = false
+let backlogIdleAsks = 0
+let backlogAskedAt = 0
+let backlogTimer: NodeJS.Timeout | null = null
+let backlogLastAt = 0
+
 /// The newest message key seen per chat — from the history sync at pairing
 /// and from every live message, tracked or not. Keys only, never content: an
 /// on-demand history read (below) needs a real message to anchor on, and the
@@ -167,6 +184,7 @@ export interface BaileysStatus {
   disconnectedAt: string | null
   lastEventAt: string | null
   lastInboundAt: string | null
+  backlog: { announced: number; messages: number; received: number; batches: number; done: boolean } | null
   lastOutboundAt: string | null
   inboundStored: number
   inboundIgnored: number
@@ -194,6 +212,7 @@ export function baileysStatus(): BaileysStatus {
     disconnectedAt: disconnectedAt?.toISOString() ?? null,
     lastEventAt: lastEventAt?.toISOString() ?? null,
     lastInboundAt: lastInboundAt?.toISOString() ?? null,
+    backlog: backlogAnnounced ? { announced: backlogAnnounced, messages: backlogMessages, received: backlogReceived, batches: backlogBatches, done: backlogDone } : null,
     lastOutboundAt: lastOutboundAt?.toISOString() ?? null,
     inboundStored,
     inboundIgnored,
@@ -275,6 +294,7 @@ function stopWatchdog() {
 function teardownSocket() {
   const sock = runtime?.sock
   runtime = null
+  stopBacklog()
   try {
     sock?.ev?.removeAllListeners?.()
     sock?.end?.(undefined)
@@ -418,6 +438,7 @@ async function openSocket(opts: StartOptions): Promise<BaileysStatus> {
     wireConnection(sock, DisconnectReason)
     wireMessages(sock)
     wireDiscovery(sock)
+    wireBacklog(sock)
     startWatchdog()
 
     if (opts.pairWithNumber && !authState.creds.registered) {
@@ -595,10 +616,15 @@ function wireMessages(sock: any) {
     const messages: any[] = payload?.messages ?? []
     for (const raw of messages) rememberKey(raw)
 
-    // 'append' is history back-fill. It is never fed to the pipeline — it
-    // would replay weeks of chat — but the chat identities in it are how a
-    // freshly linked account's private chats become visible at all.
-    if (payload?.type !== 'notify') {
+    // Baileys 6.7 emits 'append' for two things that are not history: a
+    // message it sent itself, and a message WhatsApp held while this device
+    // was off (`node.attrs.offline`). History proper arrives on
+    // `messaging-history.set`. The backlog is exactly what an operator
+    // expects to find after a restart, so it goes through the pipeline like
+    // anything live; only our own sends are skipped, since the delivery or
+    // the reply that produced them is already on record.
+    const live = payload?.type === 'notify' || payload?.type === 'append'
+    if (!live) {
       for (const raw of messages) {
         const { parsed } = parseInbound(raw, me)
         if (!parsed) continue
@@ -623,6 +649,7 @@ function wireMessages(sock: any) {
           logLine(`inbound not handled (${reason}): jid=${raw?.key?.remoteJid ?? '?'} id=${raw?.key?.id ?? '?'} content=[${Object.keys(unwrap(raw?.message) ?? {}).join(',')}]`)
           continue
         }
+        if (parsed.fromMe && payload?.type === 'append' && (outbound.has(parsed.waMessageId) || (await isOurDelivery(parsed.waMessageId)))) continue
         lastInboundAt = new Date()
         const result = await handleInbound(parsed, (p) => downloadMedia(sock, runtime?.mod, p))
         if (result.stored) inboundStored += 1
@@ -635,6 +662,111 @@ function wireMessages(sock: any) {
       }
     }
   })
+}
+
+// ── Offline backlog ────────────────────────────────────────────────────────
+
+const BACKLOG_BATCH = 100
+const BACKLOG_QUIET_MS = 3_000
+const BACKLOG_TICK_MS = 1_000
+/// Re-asks that brought nothing before the backlog is declared stuck.
+const BACKLOG_IDLE_LIMIT = 3
+
+function stopBacklog() {
+  if (backlogTimer) clearTimeout(backlogTimer)
+  backlogTimer = null
+}
+
+/// Baileys buffers every event from connect until WhatsApp's `offline`
+/// end-marker — which never comes when the backlog outgrows one batch. The
+/// backlog's messages therefore sit in that buffer, decrypted and unseen,
+/// until something releases them. Between batches, and at the end, we do.
+function releaseBacklog(sock: any) {
+  try {
+    sock.ev?.flush?.()
+  } catch (err) {
+    logLine('offline backlog: could not release buffered events', err)
+  }
+}
+
+function askBacklog(sock: any, why: string) {
+  backlogBatches += 1
+  logLine(`offline backlog: asking for batch ${backlogBatches} (${backlogReceived}/${backlogAnnounced} received, ${why})`)
+  try {
+    sock.sendNode({ tag: 'ib', attrs: {}, content: [{ tag: 'offline_batch', attrs: { count: String(BACKLOG_BATCH) } }] })
+  } catch (err) {
+    logLine('offline backlog: could not ask for the next batch', err)
+  }
+}
+
+function scheduleBacklogCheck(sock: any) {
+  stopBacklog()
+  if (backlogDone || !backlogAnnounced) return
+  backlogTimer = setTimeout(() => {
+    backlogTimer = null
+    if (backlogDone || runtime?.sock !== sock) return
+    if (backlogReceived >= backlogAnnounced) {
+      backlogDone = true
+      releaseBacklog(sock)
+      logLine(`offline backlog: all ${backlogAnnounced} items received in ${backlogBatches} batch(es)`)
+      return
+    }
+    const quietFor = Date.now() - backlogLastAt
+    if (quietFor < BACKLOG_QUIET_MS) return scheduleBacklogCheck(sock)
+    releaseBacklog(sock)
+    const sinceAsk = backlogReceived - backlogAskedAt
+    if (sinceAsk === 0) backlogIdleAsks += 1
+    else backlogIdleAsks = 0
+    if (backlogIdleAsks >= BACKLOG_IDLE_LIMIT) {
+      backlogDone = true
+      releaseBacklog(sock)
+      logLine(`offline backlog: WhatsApp stopped at ${backlogReceived}/${backlogAnnounced} after ${backlogBatches} batch(es); the rest will come on the next connect`)
+      return
+    }
+    backlogAskedAt = backlogReceived
+    askBacklog(sock, sinceAsk === 0 ? 'the last ask brought nothing' : `quiet for ${Math.round(quietFor / 1000)}s`)
+    scheduleBacklogCheck(sock)
+  }, BACKLOG_TICK_MS)
+  backlogTimer.unref?.()
+}
+
+function wireBacklog(sock: any) {
+  const ws = sock.ws
+  if (!ws?.on) return
+  backlogAnnounced = 0
+  backlogReceived = 0
+  backlogDone = false
+  stopBacklog()
+  ws.on('CB:ib,,offline_preview', (node: any) => {
+    const p = (node?.content ?? []).find((c: any) => c?.tag === 'offline_preview')?.attrs ?? {}
+    backlogAnnounced = Number(p.count ?? 0)
+    backlogMessages = Number(p.message ?? 0)
+    backlogReceived = 0
+    backlogBatches = 1 // Baileys asks for the first one itself
+    backlogAskedAt = 0
+    backlogIdleAsks = 0
+    backlogDone = backlogAnnounced === 0
+    backlogLastAt = Date.now()
+    if (backlogAnnounced) logLine(`offline backlog: WhatsApp is holding ${backlogAnnounced} items (${backlogMessages} messages) from while this device was off`)
+    scheduleBacklogCheck(sock)
+  })
+  ws.on('CB:ib,,offline', () => {
+    backlogDone = true
+    stopBacklog()
+    releaseBacklog(sock)
+    logLine(`offline backlog: WhatsApp reports the backlog delivered (${backlogReceived}/${backlogAnnounced} seen here)`)
+  })
+  // Every node the backlog is made of. The first batch is flagged
+  // `offline`; what the server sends after a re-ask arrives unflagged with
+  // its original timestamp, so the flag is not the count — arrival is.
+  for (const tag of ['message', 'receipt', 'notification', 'call']) {
+    ws.on(`CB:${tag}`, () => {
+      if (backlogDone || !backlogAnnounced) return
+      backlogReceived += 1
+      backlogLastAt = Date.now()
+      if (!backlogTimer) scheduleBacklogCheck(sock)
+    })
+  }
 }
 
 // ── Chat discovery ─────────────────────────────────────────────────────────
@@ -677,6 +809,40 @@ function wireDiscovery(sock: any) {
       logLine(`history sync applied: ${found.filter((c) => c.lastMessageAt).length} timed here, ${dated} dated overall`)
     } catch (err) {
       logLine('could not record chats from history sync', err)
+    }
+
+    // The sync carries the recent messages of every chat. For a tracked
+    // chat those are the messages that happened while this device was not
+    // linked — the same gap the offline backlog covers on a reconnect — and
+    // the only copy that does not cost a request to the phone. (Asking the
+    // phone on demand is off the table: its answers come back under the LID
+    // address on a session this side does not hold, and every one that
+    // fails to decrypt makes Baileys ask again, which makes the phone sync
+    // again, which notifies the operator. Again.) Ingest dedupes, and drops
+    // anything older than the chat's tracking start.
+    if (payload?.syncType === (runtime?.mod?.proto?.HistorySync?.HistorySyncType?.ON_DEMAND ?? 5)) return
+    try {
+      const tracked = new Set((await prisma.chat.findMany({ where: { tracked: true }, select: { jid: true } })).map((c) => c.jid))
+      if (!tracked.size) return
+      let stored = 0
+      let seenTracked = 0
+      const raws = [...(payload?.messages ?? [])].sort(
+        (a, b) => Number(a?.messageTimestamp?.low ?? a?.messageTimestamp ?? 0) - Number(b?.messageTimestamp?.low ?? b?.messageTimestamp ?? 0),
+      )
+      for (const raw of raws) {
+        if (!tracked.has(raw?.key?.remoteJid)) continue
+        const { parsed } = parseInbound(raw, me)
+        if (!parsed) continue
+        seenTracked += 1
+        const result = await handleInbound(parsed, (p) => downloadMedia(sock, runtime?.mod, p))
+        if (result.stored) {
+          stored += 1
+          inboundStored += 1
+        }
+      }
+      if (seenTracked) logLine(`history sync: ${seenTracked} message(s) of tracked chats in this chunk, ${stored} new and now stored`)
+    } catch (err) {
+      logLine('could not ingest tracked chats from history sync', err)
     }
   })
 
@@ -784,6 +950,14 @@ export function outboundBody(id: string): string | undefined {
   return outbound.get(id)
 }
 
+async function isOurDelivery(waMessageId: string): Promise<boolean> {
+  try {
+    return !!(await prisma.delivery.findFirst({ where: { waMessageId }, select: { id: true } }))
+  } catch {
+    return false
+  }
+}
+
 /// The recipient's address. Our own number is the special case: the phone
 /// now identifies itself by its LID, and holds one Signal session with this
 /// device under that address. Sending to the phone-number address made
@@ -825,26 +999,24 @@ export interface HistoryMessage {
   media: { path: string; mime: string } | null
 }
 
-/// Asks the phone for the messages of one chat, newest first, going back as
-/// far as `since`. Nothing here is stored or fed to the pipeline — it is a
-/// read for a human, which is why it lives behind the dev routes.
-///
-/// WhatsApp answers a HISTORY_SYNC_ON_DEMAND request with a
-/// `messaging-history.set` whose syncType is ON_DEMAND, containing messages
-/// older than the anchor (key + timestamp). The first page is anchored on a
-/// synthetic key at "now"; every later page on the oldest message received.
-export async function fetchChatHistory(
+/// Walks one chat's history on the phone, newest first, back to `since`,
+/// handing every message to `visit`. WhatsApp answers a
+/// HISTORY_SYNC_ON_DEMAND request with a `messaging-history.set` whose
+/// syncType is ON_DEMAND, containing messages older than the anchor (key +
+/// timestamp). The first page is anchored just after the newest message we
+/// know of; every later page on the oldest message received.
+async function walkHistory(
   jid: string,
   since: Date,
-  opts: { pageSize?: number; maxPages?: number; mediaDir?: string | null } = {},
-): Promise<HistoryMessage[]> {
+  opts: { pageSize?: number; maxPages?: number },
+  visit: (parsed: ParsedInbound) => Promise<void>,
+): Promise<number> {
   const sock = runtime?.sock
   const mod = runtime?.mod
   if (!sock?.ws?.isOpen || !mod) throw new Error('WhatsApp is not connected')
 
   const pageSize = opts.pageSize ?? 50
   const maxPages = opts.maxPages ?? 10
-  const out: HistoryMessage[] = []
   const seen = new Set<string>()
 
   let known = newestKey.get(jid)
@@ -895,40 +1067,106 @@ export async function fetchChatHistory(
       seen.add(parsed.waMessageId)
       if (!oldest || parsed.timestamp < oldest.timestamp) oldest = parsed
       if (parsed.timestamp < since) continue
-
-      let media: HistoryMessage['media'] = null
-      if (opts.mediaDir && parsed.hasMedia && parsed.type !== 'STICKER') {
-        try {
-          const dl = await downloadMedia(sock, mod, parsed)
-          if (dl) {
-            mkdirSync(opts.mediaDir, { recursive: true })
-            const path = join(opts.mediaDir, `${parsed.waMessageId.replace(/[^A-Za-z0-9_-]/g, '_')}.${dl.ext}`)
-            writeFileSync(path, dl.buffer)
-            media = { path, mime: dl.mime }
-          }
-        } catch (err) {
-          logLine(`could not download history media ${parsed.waMessageId}`, err)
-        }
-      }
-      out.push({
-        waMessageId: parsed.waMessageId,
-        senderWaId: parsed.senderWaId,
-        senderName: parsed.senderName,
-        fromMe: parsed.fromMe,
-        type: parsed.type,
-        text: parsed.text,
-        quotedWaMessageId: parsed.quotedWaMessageId,
-        sentAt: parsed.timestamp,
-        media,
-      })
+      await visit(parsed)
     }
     if (!oldest || oldest.timestamp < since) break
     anchor = { remoteJid: jid, id: oldest.waMessageId, fromMe: oldest.fromMe }
     anchorTs = oldest.timestamp.getTime()
   }
+  return seen.size
+}
 
+/// Asks the phone for the messages of one chat back to `since`. Nothing
+/// here is stored or fed to the pipeline — it is a read for a human, which
+/// is why it lives behind the dev routes.
+export async function fetchChatHistory(
+  jid: string,
+  since: Date,
+  opts: { pageSize?: number; maxPages?: number; mediaDir?: string | null } = {},
+): Promise<HistoryMessage[]> {
+  const out: HistoryMessage[] = []
+  await walkHistory(jid, since, opts, async (parsed) => {
+    let media: HistoryMessage['media'] = null
+    if (opts.mediaDir && parsed.hasMedia && parsed.type !== 'STICKER') {
+      try {
+        const dl = await downloadMedia(runtime!.sock, runtime!.mod, parsed)
+        if (dl) {
+          mkdirSync(opts.mediaDir, { recursive: true })
+          const path = join(opts.mediaDir, `${parsed.waMessageId.replace(/[^A-Za-z0-9_-]/g, '_')}.${dl.ext}`)
+          writeFileSync(path, dl.buffer)
+          media = { path, mime: dl.mime }
+        }
+      } catch (err) {
+        logLine(`could not download history media ${parsed.waMessageId}`, err)
+      }
+    }
+    out.push({
+      waMessageId: parsed.waMessageId,
+      senderWaId: parsed.senderWaId,
+      senderName: parsed.senderName,
+      fromMe: parsed.fromMe,
+      type: parsed.type,
+      text: parsed.text,
+      quotedWaMessageId: parsed.quotedWaMessageId,
+      sentAt: parsed.timestamp,
+      media,
+    })
+  })
   out.sort((a, b) => a.sentAt.getTime() - b.sentAt.getTime())
   return out
+}
+
+// ── Catching up ────────────────────────────────────────────────────────────
+
+/// Fills the gap between what a tracked chat has stored and what the phone
+/// has. The backlog above is what the server held for us; this is the
+/// safety net under it, because that queue is not a promise — a process
+/// that dies with events still buffered has acknowledged messages it never
+/// stored, and the server does not send those twice. The phone still has
+/// them, so after every backlog the tracked chats are read back to their
+/// newest stored message and anything missing goes through ingest, which
+/// skips what is already there.
+let catchUpInFlight = false
+const CATCH_UP_MAX_DAYS = 14
+
+export async function catchUpTrackedChats(reason: string): Promise<{ chats: number; stored: number; unanswered: number }> {
+  if (catchUpInFlight) return { chats: 0, stored: 0, unanswered: 0 }
+  catchUpInFlight = true
+  let chats = 0
+  let stored = 0
+  let unanswered = 0
+  try {
+    const tracked = await prisma.chat.findMany({ where: { tracked: true }, select: { id: true, jid: true, name: true, trackedSince: true } })
+    for (const chat of tracked) {
+      if (runtime?.sock?.ws?.isOpen !== true) break
+      const newest = await prisma.message.findFirst({ where: { chatId: chat.id, simulated: false }, orderBy: { sentAt: 'desc' }, select: { sentAt: true } })
+      const floor = new Date(Date.now() - CATCH_UP_MAX_DAYS * 86_400_000)
+      const since = new Date(Math.max(newest?.sentAt.getTime() ?? 0, chat.trackedSince?.getTime() ?? 0, floor.getTime()))
+      // Nothing seen and nothing stored: a quiet chat, not a gap.
+      if (!newest && !newestKey.get(chat.jid)) continue
+      chats += 1
+      let added = 0
+      try {
+        await walkHistory(chat.jid, since, { pageSize: 50, maxPages: 40 }, async (parsed) => {
+          const result = await handleInbound(parsed, (p) => downloadMedia(runtime?.sock, runtime?.mod, p))
+          if (result.stored) {
+            added += 1
+            inboundStored += 1
+          }
+        })
+      } catch (err) {
+        unanswered += 1
+        logLine(`catch-up: could not read ${chat.name ?? chat.jid} back to ${since.toISOString()}: ${err instanceof Error ? err.message : String(err)}`)
+        continue
+      }
+      stored += added
+      if (added) logLine(`catch-up: ${added} message(s) of ${chat.name ?? chat.jid} since ${since.toISOString()} were missing and are now stored`)
+    }
+    logLine(`catch-up (${reason}): ${chats} tracked chat(s) checked, ${stored} message(s) recovered${unanswered ? `, ${unanswered} unanswered by the phone` : ''}`)
+  } finally {
+    catchUpInFlight = false
+  }
+  return { chats, stored, unanswered }
 }
 
 // ── Stopping and unlinking ─────────────────────────────────────────────────
