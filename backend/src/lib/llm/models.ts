@@ -18,6 +18,10 @@ export interface ModelInfo {
 export const MODELS: ModelInfo[] = [
   // OpenRouter only — no Anthropic id, so it is offered only on that provider.
   { key: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash — recommended for the filter', anthropic: '', openrouter: 'deepseek/deepseek-v4-flash', in: 0.09, out: 0.18, effort: true },
+  // The three below take images as well as text (prices 2026-09-17).
+  { key: 'qwen3.7-flash', label: 'Qwen3.7 Flash — cheapest, reads images', anthropic: '', openrouter: 'qwen/qwen3.7-flash', in: 0.03, out: 0.13, effort: true },
+  { key: 'glm-5.3-flash', label: 'GLM 5.3 Flash — reads images, strong on Chinese', anthropic: '', openrouter: 'z-ai/glm-5.3-flash', in: 0.09, out: 0.3, effort: true },
+  { key: 'deepseek-v4.1-flash', label: 'DeepSeek V4.1 Flash — reads images', anthropic: '', openrouter: 'deepseek/deepseek-v4.1-flash', in: 0.15, out: 0.6, effort: true },
   { key: 'haiku-4.5', label: 'Claude Haiku 4.5', anthropic: 'claude-haiku-4-5', openrouter: 'anthropic/claude-haiku-4.5', in: 1, out: 5, effort: false },
   { key: 'sonnet-5', label: 'Claude Sonnet 5 — recommended for analysis', anthropic: 'claude-sonnet-5', openrouter: 'anthropic/claude-sonnet-5', in: 2, out: 10, effort: true },
   { key: 'sonnet-4.6', label: 'Claude Sonnet 4.6', anthropic: 'claude-sonnet-4-6', openrouter: 'anthropic/claude-sonnet-4.6', in: 3, out: 15, effort: true },
@@ -42,6 +46,9 @@ export const AUDIO_MODELS: ModelInfo[] = [
 /// the analysis model's price. OpenRouter ids.
 export const AGENT_MODELS: ModelInfo[] = [
   { key: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash — recommended', anthropic: '', openrouter: 'deepseek/deepseek-v4-flash', in: 0.09, out: 0.18, effort: true },
+  { key: 'qwen3.7-flash', label: 'Qwen3.7 Flash — cheapest, reads images', anthropic: '', openrouter: 'qwen/qwen3.7-flash', in: 0.03, out: 0.13, effort: true },
+  { key: 'glm-5.3-flash', label: 'GLM 5.3 Flash — reads images, strong on Chinese', anthropic: '', openrouter: 'z-ai/glm-5.3-flash', in: 0.09, out: 0.3, effort: true },
+  { key: 'deepseek-v4.1-flash', label: 'DeepSeek V4.1 Flash — reads images', anthropic: '', openrouter: 'deepseek/deepseek-v4.1-flash', in: 0.15, out: 0.6, effort: true },
   { key: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro — for escalation', anthropic: '', openrouter: 'deepseek/deepseek-v4-pro', in: 1.6, out: 3.2, effort: true },
   { key: 'kimi-k2.5', label: 'Kimi K2.5', anthropic: '', openrouter: 'moonshotai/kimi-k2.5', in: 0.45, out: 2.25, effort: true },
   { key: 'qwen3-235b', label: 'Qwen3 235B (2507)', anthropic: '', openrouter: 'qwen/qwen3-235b-a22b-2507', in: 0.09, out: 0.35, effort: false },

@@ -70,6 +70,13 @@ async function load() {
 }
 onMounted(load)
 
+const audioModelOptions = computed(() =>
+  [...new Set([form.transcribeModel!, ...audioModels.value.map((m) => m.openrouter)])].filter(Boolean).map((id) => {
+    const m = audioModels.value.find((x) => x.openrouter === id)
+    return { value: id, label: m ? `${m.label} · $${m.in}/$${m.out} per M tokens` : `${id} (custom)` }
+  }),
+)
+
 const modelOptions = computed(() => {
   const p = form.provider === 'openrouter' ? 'openrouter' : 'anthropic'
   const opts = models.value.filter((m) => m[p]).map((m) => ({ value: m[p], label: `${m.label} · $${m.in}/$${m.out} per M tokens` }))
@@ -277,7 +284,7 @@ const PROVIDERS = computed(() => [
             <BaseToggle v-model="form.describeImages!" label="Describe images" />
             <span class="text-[14px] leading-5">
               <span class="font-medium text-ink-900">Read every image before it is judged.</span><br />
-              <span class="text-ink-500">The filter model writes what the picture shows and any text in it, so a screenshot with no caption is judged on what it contains. One cheap call per image; the reading is shown under the message.</span>
+              <span class="text-ink-500">The first-pass model writes what the picture shows and any text in it, so a screenshot with no caption is judged on what it contains. One cheap call per image; the reading is shown under the message. Needs a first-pass model that reads images — the ones marked so in the list.</span>
             </span>
           </label>
           <label class="flex items-start gap-3 py-2">
@@ -287,14 +294,6 @@ const PROVIDERS = computed(() => [
               <span class="text-ink-500">Verbatim, in whatever mix of Malay, English and Chinese was spoken. Needs an OpenRouter key whatever the provider — the Anthropic API takes no audio. A 30-second note costs well under a cent.</span>
             </span>
           </label>
-          <div v-if="form.transcribeVoice" class="py-2 pl-14">
-            <BaseSelect
-              v-model="form.transcribeModel"
-              label="Transcription model"
-              :options="[...new Set([form.transcribeModel!, ...audioModels.map((m) => m.openrouter)])].map((id) => ({ value: id, label: audioModels.find((m) => m.openrouter === id) ? `${audioModels.find((m) => m.openrouter === id)!.label} · $${audioModels.find((m) => m.openrouter === id)!.in}/$${audioModels.find((m) => m.openrouter === id)!.out} per M tokens` : id }))"
-              :hint="s?.keys.openrouter.configured ? 'Always called through OpenRouter.' : 'No OpenRouter key yet — add one above or voice notes stay untranscribed.'"
-            />
-          </div>
           <label class="flex items-start gap-3 py-2">
             <BaseToggle v-model="form.translateOriginals!" label="Translate Chinese originals" />
             <span class="text-[14px] leading-5">
@@ -365,6 +364,13 @@ const PROVIDERS = computed(() => [
           <div class="mt-5 space-y-4">
             <BaseSelect v-model="form.filterModel" label="First pass (filter) model" :options="modelOptions" :disabled="form.provider === 'mock'" hint="Runs on every message. Keep it cheap." />
             <BaseSelect v-model="form.analyzeModel" label="Second pass (analysis) model" :options="modelOptions" :disabled="form.provider === 'mock'" hint="Runs only on flagged messages. This writes the briefs." />
+            <BaseSelect
+              v-model="form.transcribeModel"
+              label="Voice note (transcription) model"
+              :options="audioModelOptions"
+              :disabled="form.provider === 'mock' || !form.transcribeVoice"
+              :hint="!form.transcribeVoice ? 'Voice notes are not transcribed — switch it on under Options.' : s?.keys.openrouter.configured ? 'Always called through OpenRouter, whatever the provider — the Anthropic API takes no audio. Images are read by the first-pass model.' : 'No OpenRouter key yet — add one above or voice notes stay untranscribed.'"
+            />
           </div>
 
           <div class="mt-5 flex flex-wrap items-center gap-3">
